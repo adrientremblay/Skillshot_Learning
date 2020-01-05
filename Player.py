@@ -12,7 +12,7 @@ class Player(object):
                    [0, 1, 1, 1, 0],
                    [0, 0, 0, 0, 0]]
     speed_move = 3
-    speed_look = 0.1
+    speed_look = 0.25
     speed_projectile = 5
     projectile_cooldown_max = 10
 
@@ -27,11 +27,22 @@ class Player(object):
         self.projectile = Projectile(self.speed_projectile, (0, 0), board_dim)
         self.projectile_cooldown_current = 0
 
+        self.gradient = 0
+        self.x_dir = 0
+
     def move_look_left(self):
         self.rotation += self.speed_look
 
     def move_look_right(self):
         self.rotation -= self.speed_look
+
+    def move_look_float(self, angle):
+        # allows for precise control of rotation
+        # angle is limited to between -1 and 1, with -1 and 1 being the maximum turn speed
+        angle = 1 if angle >= 1 else angle
+        angle = -1 if angle <= -1 else angle
+
+        self.rotation += angle * self.speed_look
 
     def move_forwards(self):
         new_pos_x = int(round(self.pos[0] - math.sin(self.rotation) * self.speed_move))
@@ -68,3 +79,10 @@ class Player(object):
             self.projectile.valid = True
             # reset cooldown
             self.projectile_cooldown_current = self.projectile_cooldown_max
+
+    def get_gradient_dir(self):
+        # gets the current gradient of the projectile
+        # convert rotation in radians to gradient
+        self.gradient = math.tan(-self.rotation + math.pi/2)
+        # get the x_dir using sin, round away from 0 to 1 or -1
+        self.x_dir = 1 if -math.sin(self.rotation) >= 0 else -1
