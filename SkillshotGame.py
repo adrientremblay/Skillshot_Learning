@@ -11,8 +11,8 @@ class SkillshotGame(object):
         self.board_size = (250, 250)
         self.board = np.zeros(self.board_size, dtype=int)
 
-        self.player1 = Player([150, 100], self.board_size, 1)
-        self.player2 = Player([150, 200], self.board_size, 2)
+        self.player1 = Player([50, 50], self.board_size, 1)
+        self.player2 = Player([200, 200], self.board_size, 2)
 
         self.ticks = 0
         self.game_live = True

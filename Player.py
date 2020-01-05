@@ -60,6 +60,19 @@ class Player(object):
             self.pos[0] = new_pos_x
             self.pos[1] = new_pos_y
 
+    def move_direction_float(self, speed):
+        # allows for precise control of forwards/backwards movement
+        # speed is limited to between -1 and 1, with -1 and 1 being the maximum backwards and forwards speeds
+        speed = 1 if speed >= 1 else speed
+        speed = -1 if speed <= -1 else speed
+
+        new_pos_x = int(round(self.pos[0] - math.sin(self.rotation) * self.speed_move * speed))
+        new_pos_y = int(round(self.pos[1] - math.cos(self.rotation) * self.speed_move * speed))
+
+        if self.check_pos_valid(new_pos_x, new_pos_y):
+            self.pos[0] = new_pos_x
+            self.pos[1] = new_pos_y
+
     def check_pos_valid(self, check_x, check_y):
         # checks if a position if within the board bounds
         if (check_x + self.shape_size[0] <= self.board_dim[0] and check_x >= 0 and
