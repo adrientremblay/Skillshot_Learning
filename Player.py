@@ -56,7 +56,7 @@ class Player(object):
         # sets projetile position to  player position
         self.projectile.set_position(self.pos)
         # sets projectile direction to rotation (in rad, convert to gradent)
-        self.projectile.set_direction(math.tan(self.rotation))
+        # also get the x_dir using cos, round away from 0 to 1 or -1
+        self.projectile.set_direction(math.tan(-self.rotation + math.pi/2), 1 if -math.sin(self.rotation) >= 0 else -1)
         # sets projectile to valid
         self.projectile.valid = True
-        print(self.projectile.direction)

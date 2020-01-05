@@ -6,7 +6,9 @@ class Projectile(object):
     def __init__(self, speed, location, board_dim):
         self.speed = speed
         self.pos = list(location)
-        self.direction = 0
+        self.gradient = 0
+        self.x_dir = 0
+
         self.valid = False
         self.board_dim = board_dim
         self.shape_size = (len(self.shape_image[0]), len(self.shape_image))
@@ -15,9 +17,10 @@ class Projectile(object):
         # location given as tuple or list, sets the location of the projectile to the given location
         self.pos = list(location)
 
-    def set_direction(self, gradient):
+    def set_direction(self, gradient, x_dir):
         # sets the direction of the projectile, using gradient
-        self.direction = gradient
+        self.gradient = gradient
+        self.x_dir = x_dir
 
     def check_pos_valid(self, check_x, check_y):
         # checks if a position if within the board bounds
@@ -28,8 +31,8 @@ class Projectile(object):
 
     def move_forwards(self):
         # moves the projectile forwards by self.speed for every time its called (each tick)
-        new_pos_x = self.pos[0] + int(round(self.speed))
-        new_pos_y = self.pos[1] + int(round(self.direction * self.speed))
+        new_pos_x = self.pos[0] + int(round(self.speed)) * self.x_dir
+        new_pos_y = self.pos[1] + int(round(self.gradient * self.speed)) * self.x_dir
         if self.valid and self.check_pos_valid(new_pos_x, new_pos_y):
             self.pos[0] = new_pos_x
             self.pos[1] = new_pos_y
