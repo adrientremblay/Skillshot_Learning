@@ -51,18 +51,17 @@ while run:
             player.move_look_left()
         if player_inputs.get("lookright"):
             player.move_look_right()
+        if player_inputs.get("shoot"):
+            player.move_shoot_projectile()
 
     # Update game object status
-    # skillshotGame.game_tick()
+    skillshotGame.tick_game()
 
     # Draw the combined board on the surface_board
     for index_y, row_x in enumerate(skillshotGame.get_board()):
         for index_x, item in enumerate(row_x):
             tetris_pixel = pygame.Rect((index_y * pixel_size, index_x * pixel_size), (pixel_size, pixel_size))
             pygame.draw.rect(surface_board, colours[item], tetris_pixel)
-
-    # Draw a dot showing the rotation of both players
-    # TODO
 
     # Update screen surface
     screen.blit(surface_board, (10, 10))

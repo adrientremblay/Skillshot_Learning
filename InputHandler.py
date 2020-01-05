@@ -3,8 +3,8 @@ import pygame
 
 class InputHandler(object):
     def __init__(self):
-        self.player1_actions = {"forwards": False, "backwards": False, "lookleft": False, "lookright": False}
-        self.player2_actions = {"forwards": False, "backwards": False, "lookleft": False, "lookright": False}
+        self.player1_actions = {"forwards": False, "backwards": False, "lookleft": False, "lookright": False, "shoot": False}
+        self.player2_actions = {"forwards": False, "backwards": False, "lookleft": False, "lookright": False, "shoot": False}
 
     def input_start(self, key):
         if key == pygame.K_w:
@@ -15,6 +15,8 @@ class InputHandler(object):
             self.player1_actions["lookleft"] = True
         elif key == pygame.K_d:
             self.player1_actions["lookright"] = True
+        elif key == pygame.K_SPACE:
+            self.player1_actions["shoot"] = True
         elif key == pygame.K_UP:
             self.player2_actions["forwards"] = True
         elif key == pygame.K_DOWN:
@@ -23,6 +25,8 @@ class InputHandler(object):
             self.player2_actions["lookleft"] = True
         elif key == pygame.K_RIGHT:
             self.player2_actions["lookright"] = True
+        elif key == pygame.K_PERIOD:
+            self.player2_actions["shoot"] = True
 
     def input_stop(self, key):
         if key == pygame.K_w:
@@ -33,6 +37,8 @@ class InputHandler(object):
             self.player1_actions["lookleft"] = False
         elif key == pygame.K_d:
             self.player1_actions["lookright"] = False
+        elif key == pygame.K_SPACE:
+            self.player1_actions["shoot"] = False
         elif key == pygame.K_UP:
             self.player2_actions["forwards"] = False
         elif key == pygame.K_DOWN:
@@ -41,6 +47,8 @@ class InputHandler(object):
             self.player2_actions["lookleft"] = False
         elif key == pygame.K_RIGHT:
             self.player2_actions["lookright"] = False
+        elif key == pygame.K_PERIOD:
+            self.player2_actions["shoot"] = False
 
     def get_inputs(self):
         return self.player1_actions, self.player2_actions
