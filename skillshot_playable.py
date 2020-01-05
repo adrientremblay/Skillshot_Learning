@@ -40,6 +40,10 @@ while run:
             inputHandler.input_start(event.key)
         elif event.type == pygame.KEYUP:
             inputHandler.input_stop(event.key)
+        if event.type == pygame.KEYDOWN:                # DEBUG
+            if event.key == pygame.K_0:
+                skillshotGame.game_reset()
+                print("game reset")
 
     # do the actions in the inputHandler
     for player_inputs, player in zip(inputHandler.get_inputs(), (skillshotGame.player1, skillshotGame.player2)):
@@ -55,7 +59,7 @@ while run:
             player.move_shoot_projectile()
 
     # Update game object status
-    skillshotGame.tick_game()
+    skillshotGame.game_tick()
 
     # Draw the combined board on the surface_board
     for index_y, row_x in enumerate(skillshotGame.get_board()):

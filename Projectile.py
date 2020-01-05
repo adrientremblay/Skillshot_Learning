@@ -2,9 +2,9 @@ import math
 
 
 class Projectile(object):
-    shape_image = [[0, 0, 0],
+    shape_image = [[1, 0, 1],
                    [0, 1, 0],
-                   [0, 0, 0]]
+                   [1, 0, 1]]
 
     def __init__(self, speed, location, board_dim):
         self.speed_move = speed

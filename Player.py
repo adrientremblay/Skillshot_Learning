@@ -16,7 +16,9 @@ class Player(object):
     speed_projectile = 5
     projectile_cooldown_max = 10
 
-    def __init__(self, pos, board_dim):
+    def __init__(self, pos, board_dim, player_id):
+        self.id = player_id
+
         self.pos = pos
         self.rotation = 0
         self.board_dim = board_dim
