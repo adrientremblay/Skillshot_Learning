@@ -28,7 +28,7 @@ class SkillshotGame(object):
                         board[index_x + player.pos[0], index_y + player.pos[1]] = player_colour_index
                     # append direction indicator
                     if (index_x == math.floor(-math.sin(player.rotation) * player.shape_size[0] / 2 + player.shape_size[0] / 2) and
-                        index_y == math.floor(-math.cos(player.rotation) * player.shape_size[1] / 2 + player.shape_size[1] / 2)):
+                            index_y == math.floor(-math.cos(player.rotation) * player.shape_size[1] / 2 + player.shape_size[1] / 2)):
                         board[index_x + player.pos[0], index_y + player.pos[1]] = pointer_colour_index
             # projectile
             for index_y, row in enumerate(player.projectile.shape_image):

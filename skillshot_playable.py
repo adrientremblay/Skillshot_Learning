@@ -56,13 +56,12 @@ while run:
 
     # Update game object status
     skillshotGame.tick_game()
-    print(skillshotGame.player1.projectile_cooldown_current)
 
     # Draw the combined board on the surface_board
     for index_y, row_x in enumerate(skillshotGame.get_board()):
         for index_x, item in enumerate(row_x):
-            tetris_pixel = pygame.Rect((index_y * pixel_size, index_x * pixel_size), (pixel_size, pixel_size))
-            pygame.draw.rect(surface_board, colours[item], tetris_pixel)
+            pixel = pygame.Rect((index_y * pixel_size, index_x * pixel_size), (pixel_size, pixel_size))
+            pygame.draw.rect(surface_board, colours[item], pixel)
 
     # Update screen surface
     screen.blit(surface_board, (10, 10))
