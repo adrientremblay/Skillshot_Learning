@@ -5,10 +5,10 @@ from SkillshotGame import SkillshotGame
 
 # Colours
 colours = [(0, 0, 0),
+           (200, 100, 100),
+           (100, 200, 100),
            (255, 0, 0),
-           (0, 255, 0),
-           (0, 0, 255),
-           (255, 120, 0)]
+           (0, 255, 0)]
 
 pygame.init()
 

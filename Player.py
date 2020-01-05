@@ -4,11 +4,11 @@ import numpy as np
 
 
 class Player(object):
-    shape = [[0, 0, 1, 0, 0],
-             [0, 1, 1, 1, 0],
-             [0, 1, 1, 1, 0],
-             [0, 1, 1, 1, 0],
-             [1, 1, 1, 1, 1]]
+    shape_image = [[0, 0, 0, 0, 0],
+                   [0, 1, 1, 1, 0],
+                   [0, 1, 1, 1, 0],
+                   [0, 1, 1, 1, 0],
+                   [0, 0, 0, 0, 0]]
     speed_move = 5
     speed_look = 0.1
 
@@ -16,10 +16,10 @@ class Player(object):
         self.pos = pos
         self.rotation = 0
         self.board_dim = board_dim
+        self.shape_size = (len(self.shape_image[0]), len(self.shape_image))
 
     def move_look_left(self):
         self.rotation += self.speed_look
-        print(self.rotation)
 
     def move_look_right(self):
         self.rotation -= self.speed_look
@@ -41,7 +41,7 @@ class Player(object):
             self.pos[1] = new_pos_y
 
     def check_pos_valid(self, check_x, check_y):
-        if check_x + len(self.shape[0]) <= 250 and check_x >= 0 and check_y + len(self.shape) <= 250 and check_y >= 0:
+        if check_x + self.shape_size[0] <= 250 and check_x >= 0 and check_y + self.shape_size[1] <= 250 and check_y >= 0:
             return True
         else:
             return False
