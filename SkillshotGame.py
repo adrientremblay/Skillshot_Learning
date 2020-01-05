@@ -42,3 +42,4 @@ class SkillshotGame(object):
         self.game_tick += 1
         for player in [self.player1, self.player2]:
             player.projectile.move_forwards()
+            player.projectile_cooldown_current -= 1

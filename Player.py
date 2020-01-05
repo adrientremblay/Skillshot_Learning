@@ -14,6 +14,7 @@ class Player(object):
     speed_move = 3
     speed_look = 0.1
     speed_projectile = 5
+    projectile_cooldown_max = 10
 
     def __init__(self, pos, board_dim):
         self.pos = pos
@@ -22,6 +23,7 @@ class Player(object):
         self.shape_size = (len(self.shape_image[0]), len(self.shape_image))
 
         self.projectile = Projectile(self.speed_projectile, (0, 0), board_dim)
+        self.projectile_cooldown_current = 0
 
     def move_look_left(self):
         self.rotation += self.speed_look
@@ -47,16 +49,20 @@ class Player(object):
 
     def check_pos_valid(self, check_x, check_y):
         # checks if a position if within the board bounds
-        if check_x + self.shape_size[0] <= 250 and check_x >= 0 and check_y + self.shape_size[1] <= 250 and check_y >= 0:
+        if (check_x + self.shape_size[0] <= self.board_dim[0] and check_x >= 0 and
+                check_y + self.shape_size[1] <= self.board_dim[1] and check_y >= 0):
             return True
         else:
             return False
 
     def move_shoot_projectile(self):
-        # sets projetile position to  player position
-        self.projectile.set_position(self.pos)
-        # sets projectile direction to rotation (in rad, convert to gradent)
-        # also get the x_dir using cos, round away from 0 to 1 or -1
-        self.projectile.set_direction(math.tan(-self.rotation + math.pi/2), 1 if -math.sin(self.rotation) >= 0 else -1)
-        # sets projectile to valid
-        self.projectile.valid = True
+        # check if firing projectile is valid
+        if self.projectile_cooldown_current <= 0:
+            # set projectile position to  player position
+            self.projectile.set_position(self.pos)
+            # set projectile rotation to the same as the player
+            self.projectile.set_rotation(self.rotation)
+            # set projectile to valid
+            self.projectile.valid = True
+            # reset cooldown
+            self.projectile_cooldown_current = self.projectile_cooldown_max

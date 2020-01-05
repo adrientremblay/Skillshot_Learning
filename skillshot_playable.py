@@ -12,7 +12,7 @@ colours = [(0, 0, 0),
 
 pygame.init()
 
-size = (750, 750)
+size = (520, 520)
 screen = pygame.display.set_mode(size)
 screen.fill((0, 100, 100))
 pygame.display.set_caption("Skillshot Playable")
@@ -41,7 +41,7 @@ while run:
         elif event.type == pygame.KEYUP:
             inputHandler.input_stop(event.key)
 
-    # do the action in the inputHandler
+    # do the actions in the inputHandler
     for player_inputs, player in zip(inputHandler.get_inputs(), (skillshotGame.player1, skillshotGame.player2)):
         if player_inputs.get("forwards"):
             player.move_forwards()
@@ -56,6 +56,7 @@ while run:
 
     # Update game object status
     skillshotGame.tick_game()
+    print(skillshotGame.player1.projectile_cooldown_current)
 
     # Draw the combined board on the surface_board
     for index_y, row_x in enumerate(skillshotGame.get_board()):
@@ -67,5 +68,5 @@ while run:
     screen.blit(surface_board, (10, 10))
     pygame.display.flip()
 
-    # Frame rate limit
+    # Frame-rate limit
     clock.tick(60)
