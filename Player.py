@@ -96,5 +96,7 @@ class Player(object):
         gradient = math.tan(-self.rotation + math.pi/2)
         # get the x_dir using sin, round away from 0 to 1 or -1
         x_dir = 1 if -math.sin(self.rotation) >= 0 else -1
+        # calculate y-intercept
+        y_intercept = self.pos[1] - gradient * self.pos[0]
 
-        return dict(gradient=gradient, x_dir=x_dir)
+        return dict(gradient=gradient, x_dir=x_dir, y_intercept=y_intercept)

@@ -73,6 +73,24 @@ class SkillshotGame(object):
                     self.game_live = False
                     break
 
+    @staticmethod
+    def check_future_collision(projectile, opponent):
+        # takes projectile dict and opponent
+        # determines if the projectile will hit the opponent if the opponent remains stationary
+        # checks to see if the projectile line intersects the opponent
+        if projectile.valid:
+            projectile_grad_dir = projectile.get_gradient_dir()
+            # find the x-boundary values of the opponent
+            for x_bound in (opponent.pos[0], opponent.pos[0] + opponent.shape_size[0]):
+                # check if the projectile is traveling in the right direction
+                # this simple method may not work for when the projectiles are close,
+                # as it assume the index point (top left) is the only relevant point on both objects
+                if (opponent.pos[0] - projectile.pos[0]) * projectile_grad_dir.get("x_dir") >= 0:
+                    # test if the y value for the line at the x-values are within the y-values of the opponent
+                    if opponent.pos[1] <= projectile_grad_dir.get("gradient") * x_bound + projectile_grad_dir.get("y_intercept") <= opponent.pos[1] + opponent.shape_size[1]:
+                        return True
+        return False
+
     def game_tick(self):
         # check if game if live
         if self.game_live:
@@ -96,7 +114,11 @@ class SkillshotGame(object):
         return ((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)**0.5
 
     def get_state(self):
-        # collects the game state and returns 2 dicts (one for each player) with all the features for model use
+        # collects game state and returns a dict, containing 2 dicts (one for each player) as well as general features
+        # first create the outer dict with general features
+        feature_dict = dict(game_live=self.game_live, ticks=self.ticks)
+
+        # create a dict for each player with the player and projectile specific features
         for player, opponent_player in (self.player1, self.player2), (self.player2, self.player1):
             # player features
             player_grad_dir_dict = player.get_gradient_dir()
@@ -113,7 +135,12 @@ class SkillshotGame(object):
             player.projectile.pos[1]
             player.projectile.rotation
             self.get_dist_point_point(player.projectile.pos, opponent_player.pos)  # distance between projectile and opponent
-            # is projectile going to hit opponent
+            a = self.check_future_collision(player.projectile, opponent_player)
+            print(a)
+            # append the player dict to the main feature dict
+            # feature_dict[player.id] = player_feature_dict
+
+
 
     def game_reset(self):
         self.__init__()

@@ -42,8 +42,9 @@ while run:
             inputHandler.input_stop(event.key)
         if event.type == pygame.KEYDOWN:  # DEBUG
             if event.key == pygame.K_0:
-                skillshotGame.game_reset()
-                print("game reset")
+                # skillshotGame.game_reset()
+                # print("game reset")
+                skillshotGame.get_state()
 
     # do the actions in the inputHandler
     for player_inputs, player in zip(inputHandler.get_inputs(), (skillshotGame.player1, skillshotGame.player2)):
