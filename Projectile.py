@@ -6,11 +6,15 @@ class Projectile(object):
                    [0, 1, 0],
                    [1, 0, 1]]
 
-    def __init__(self, speed, location, board_dim):
-        self.speed_move = speed
+    cooldown_max = 10
+    speed_move = 5
+
+    def __init__(self, location, board_dim):
         self.pos = list(location)
         self.rotation = 0
 
+        self.cooldown_current = 0
+        self.age = 0
         self.valid = False
         self.board_dim = board_dim
         self.shape_size = (len(self.shape_image[0]), len(self.shape_image))
@@ -41,6 +45,12 @@ class Projectile(object):
             self.pos[1] = new_pos_y
         else:
             self.valid = False
+
+    def tick(self):
+        # called every game tick, ticks the whole projectile class
+        self.move_forwards()
+        self.cooldown_current -= 1
+        self.age += 1
 
     def get_gradient_dir(self):
         # gets the current gradient of the projectile

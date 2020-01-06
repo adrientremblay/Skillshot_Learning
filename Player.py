@@ -13,8 +13,6 @@ class Player(object):
                    [0, 0, 0, 0, 0]]
     speed_move = 3
     speed_look = 0.25
-    speed_projectile = 5
-    projectile_cooldown_max = 10
 
     def __init__(self, pos, board_dim, player_id):
         self.id = player_id
@@ -24,8 +22,7 @@ class Player(object):
         self.board_dim = board_dim
         self.shape_size = (len(self.shape_image[0]), len(self.shape_image))
 
-        self.projectile = Projectile(self.speed_projectile, (0, 0), board_dim)
-        self.projectile_cooldown_current = 0
+        self.projectile = Projectile((0, 0), board_dim)
 
     def move_look_left(self):
         self.rotation += self.speed_look
@@ -80,15 +77,16 @@ class Player(object):
 
     def move_shoot_projectile(self):
         # check if firing projectile is valid
-        if self.projectile_cooldown_current <= 0:
+        if self.projectile.cooldown_current <= 0:
             # set projectile position to  player position
             self.projectile.set_position(self.pos)
             # set projectile rotation to the same as the player
             self.projectile.set_rotation(self.rotation)
             # set projectile to valid
             self.projectile.valid = True
-            # reset cooldown
-            self.projectile_cooldown_current = self.projectile_cooldown_max
+            # reset cooldown and projectile age
+            self.projectile.cooldown_current = self.projectile.cooldown_max
+            self.projectile.age = 0
 
     def get_gradient_dir(self):
         # gets the current gradient of the projectile
