@@ -27,9 +27,6 @@ class Player(object):
         self.projectile = Projectile(self.speed_projectile, (0, 0), board_dim)
         self.projectile_cooldown_current = 0
 
-        self.gradient = 0
-        self.x_dir = 0
-
     def move_look_left(self):
         self.rotation += self.speed_look
 
@@ -96,6 +93,8 @@ class Player(object):
     def get_gradient_dir(self):
         # gets the current gradient of the projectile
         # convert rotation in radians to gradient
-        self.gradient = math.tan(-self.rotation + math.pi/2)
+        gradient = math.tan(-self.rotation + math.pi/2)
         # get the x_dir using sin, round away from 0 to 1 or -1
-        self.x_dir = 1 if -math.sin(self.rotation) >= 0 else -1
+        x_dir = 1 if -math.sin(self.rotation) >= 0 else -1
+
+        return dict(gradient=gradient, x_dir=x_dir)

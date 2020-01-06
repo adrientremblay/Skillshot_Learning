@@ -83,5 +83,37 @@ class SkillshotGame(object):
                 player.projectile_cooldown_current -= 1
             self.check_collision()
 
+    @staticmethod
+    def get_dist_line_point(line_gradient, line_point, comparison_point):
+        # returns the minimum distance between a line and a point
+        # first convert the line to ax+by+c=0 form
+        c = (line_point[1] - line_gradient * line_point[0])
+        # c=c, b=-1, a=line_gradient
+        return abs(line_gradient * comparison_point[0] - comparison_point[1] + c) / math.sqrt(line_gradient**2 + 1)
+
+    @staticmethod
+    def get_dist_point_point(point1, point2):
+        return ((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)**0.5
+
+    def get_state(self):
+        # collects the game state and returns 2 dicts (one for each player) with all the features for model use
+        for player, opponent_player in (self.player1, self.player2), (self.player2, self.player1):
+            # player features
+            player_grad_dir_dict = player.get_gradient_dir()
+            self.get_dist_line_point(player_grad_dir_dict.get("gradient"), player.pos, opponent_player.pos)  # min distance from a point on this line to opponent
+            player.pos[0]
+            player.pos[1]
+            player.rotation
+
+            # player's projectile features
+            player.projectile_cooldown_current
+            projectile_grad_dir_dict = player.projectile.get_gradient_dir()
+            self.get_dist_line_point(projectile_grad_dir_dict.get("gradient"), player.projectile.pos, opponent_player.pos)  # min distance from a point on this line to opponent
+            player.projectile.pos[0]
+            player.projectile.pos[1]
+            player.projectile.rotation
+            self.get_dist_point_point(player.projectile.pos, opponent_player.pos)  # distance between projectile and opponent
+            # is projectile going to hit opponent
+
     def game_reset(self):
         self.__init__()

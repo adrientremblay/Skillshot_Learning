@@ -10,8 +10,6 @@ class Projectile(object):
         self.speed_move = speed
         self.pos = list(location)
         self.rotation = 0
-        self.gradient = 0
-        self.x_dir = 0
 
         self.valid = False
         self.board_dim = board_dim
@@ -47,6 +45,8 @@ class Projectile(object):
     def get_gradient_dir(self):
         # gets the current gradient of the projectile
         # convert rotation in radians to gradient
-        self.gradient = math.tan(-self.rotation + math.pi/2)
+        gradient = math.tan(-self.rotation + math.pi / 2)
         # get the x_dir using sin, round away from 0 to 1 or -1
-        self.x_dir = 1 if -math.sin(self.rotation) >= 0 else -1
+        x_dir = 1 if -math.sin(self.rotation) >= 0 else -1
+
+        return dict(gradient=gradient, x_dir=x_dir)

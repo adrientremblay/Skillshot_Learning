@@ -1,10 +1,13 @@
 import numpy as np
 
+from SkillshotGame import SkillshotGame
+
 
 class SkillshotLearner(object):
     def __init__(self):
         self.actions = None
         self.model = None
+        self.game = SkillshotGame()
 
     def model_define(self):
         # defines and creates a model
@@ -16,9 +19,30 @@ class SkillshotLearner(object):
 
     def model_train(self, epochs, mutate_threshold):
         # model plays the game and saves actions
-        pass
+        for epoch in range(epochs):
+            # reset the game
+            self.game.game_reset()
+            # enter game
+            while self.game.game_live:
+                # get the game state
 
-    def model_fit(self, epochs, mutate_threshold):
+                # do actions
+
+                # get the reward
+
+                # save the game state and reward
+
+                # tick the game
+                self.game.game_tick()
+
+            # after each epoch ends, fit the model
+            self.model_fit()
+        # after all epochs are completed
+        print("Training Completed")
+        # save model
+        self.model_save()
+
+    def model_fit(self, features, targets):
         # after each game is played, fit the model
         pass
 
