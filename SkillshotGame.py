@@ -80,15 +80,16 @@ class SkillshotGame(object):
         # checks to see if the projectile line intersects the opponent
         if projectile.valid:
             projectile_grad_dir = projectile.get_gradient_dir()
-            # find the x-boundary values of the opponent
-            for x_bound in (opponent.pos[0], opponent.pos[0] + opponent.shape_size[0]):
-                # check if the projectile is traveling in the right direction
-                # this simple method may not work for when the projectiles are close,
-                # as it assume the index point (top left) is the only relevant point on both objects
-                if (opponent.pos[0] - projectile.pos[0]) * projectile_grad_dir.get("x_dir") >= 0:
-                    # test if the y value for the line at the x-values are within the y-values of the opponent
-                    if opponent.pos[1] <= projectile_grad_dir.get("gradient") * x_bound + projectile_grad_dir.get("y_intercept") <= opponent.pos[1] + opponent.shape_size[1]:
-                        return True
+            # find the x-boundary values of the opponent and projectile
+            for x_bound_projectile in (projectile.pos[0], projectile.pos[0] + projectile.shape_size[0]):
+                for x_bound_opponent in (opponent.pos[0], opponent.pos[0] + opponent.shape_size[0]):
+                    # check if the projectile is traveling in the right direction
+                    # this simple method may not work for when the projectiles are close,
+                    # as it assume the index point (top left) is the only relevant point on both objects
+                    if (x_bound_projectile - projectile.pos[0]) * projectile_grad_dir.get("x_dir") >= 0:
+                        # test if the y value for the line at the x-values are within the y-values of the opponent
+                        if opponent.pos[1] <= projectile_grad_dir.get("gradient") * x_bound_opponent + projectile_grad_dir.get("y_intercept") <= opponent.pos[1] + opponent.shape_size[1]:
+                            return True
         return False
 
     def game_tick(self):
