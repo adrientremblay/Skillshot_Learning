@@ -18,6 +18,15 @@ class SkillshotGame(object):
         self.game_live = True
         self.game_winner = 0
 
+    def get_player_by_id(self, player_id):
+        # takes player id and returns the player with matching id
+        if self.player1.id == player_id:
+            return self.player1
+        elif self.player2.id == player_id:
+            return self.player2
+        else:
+            return None
+
     def get_board(self):
         board = self.board.copy()
         # append players and projectiles

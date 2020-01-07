@@ -28,13 +28,21 @@ class SkillshotLearner(object):
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
         if np.random.rand() > mutate_threshold:
-            # prepare features for the model
+            # prepare features for the model, extract from list with length 1
             features = self.prepare_features(game_state, player_id)[0]
             # take prepared features, feed through model to find actions and performs them on model
+            predictions = self.model.predict(features)
         else:
-            # randomly generate actions
+            # randomly generate actions, ensure shape is same as model output
+            predictions = [0]
 
-        return 0  # also returns the features taken
+        # perform the generated or predicted action(s)
+        self.game.get_player_by_id(player_id).move_direction_float()
+        self.game.get_player_by_id(player_id).move_look_float()
+        self.game.get_player_by_id(player_id).move_shoot_projectile()
+
+        # also return the model output or the random model imitation output
+        return predictions
 
     def model_train(self, epochs, mutate_threshold):
         # model plays the game and saves actions
@@ -48,7 +56,7 @@ class SkillshotLearner(object):
                 # get the game state
                 game_state = self.game.get_state()
 
-                # do and save actions
+                # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
                     current_epoch_progress.get("epoch_actions").append(self.model_act(player_id, game_state, mutate_threshold))
 
