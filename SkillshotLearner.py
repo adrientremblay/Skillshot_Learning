@@ -24,10 +24,16 @@ class SkillshotLearner(object):
         # saves a model to the save location
         pass
 
-    def model_act(self, player_id, features, mutate_threshold):
+    def model_act(self, player_id, game_state, mutate_threshold):
         # checks threshold to see if model acts or random acts,
-        # then takes features, feeds through model to find actions and performs them on model
-        np.
+        # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
+        if np.random.rand() > mutate_threshold:
+            # prepare features for the model
+            features = self.prepare_features(game_state, player_id)[0]
+            # take prepared features, feed through model to find actions and performs them on model
+        else:
+            # randomly generate actions
+
         return 0  # also returns the features taken
 
     def model_train(self, epochs, mutate_threshold):
@@ -44,9 +50,7 @@ class SkillshotLearner(object):
 
                 # do and save actions
                 for player_id in self.player_ids:
-                    current_epoch_progress.get("epoch_actions").append(self.model_act(player_id,
-                                                                       self.prepare_features(game_state, player_id)[0],
-                                                                       mutate_threshold))
+                    current_epoch_progress.get("epoch_actions").append(self.model_act(player_id, game_state, mutate_threshold))
 
                 # save the game state - possibly also save the get_board here to visualise model later
                 current_epoch_progress.get("epoch_game_state").append(game_state)
@@ -87,39 +91,39 @@ class SkillshotLearner(object):
         self.model.fit(features, targets, batch_size=batch_size, verbose=1)
 
     @staticmethod
-    def prepare_features(features, player_id):
+    def prepare_features(game_state, player_id):
         # prepares the model inputs / reshapes for model
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         return [0]  # returns list
 
     @staticmethod
-    def prepare_targets(targets, player_id):
+    def prepare_targets(rewards, player_id):
         # prepares the model targets / reshapes for model
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         return [0]  # returns list
 
     @staticmethod
-    def calculate_reward(features, player_id, opponent_id, on_target_multiplier_change=0.5):
+    def calculate_reward(game_state, player_id, opponent_id, on_target_multiplier_change=0.5):
         # calculates the reward from the given state
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
-        if features.get("game_winner") == player_id:
+        if game_state.get("game_winner") == player_id:
             # reward winning
             return np.inf
-        elif features.get("game_winner") == opponent_id:
+        elif game_state.get("game_winner") == opponent_id:
             # punish loosing
             return -np.inf
-        elif not features.get(player_id).get("projectile_valid"):
+        elif not game_state.get(player_id).get("projectile_valid"):
             # punish invalid projectile
             return -np.inf
         else:
             # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
             # add extra multiplier if the projectile is currently on target
             opponent_reward_multiplier, player_reward_multiplier = 1, 1
-            if features.get(player_id).get("projectile_future_collision_opponent"):
+            if game_state.get(player_id).get("projectile_future_collision_opponent"):
                 player_reward_multiplier -= on_target_multiplier_change
-            if features.get(opponent_id).get("projectile_future_collision_opponent"):
+            if game_state.get(opponent_id).get("projectile_future_collision_opponent"):
                 opponent_reward_multiplier -= on_target_multiplier_change
-            return features.get(opponent_id).get("Projectile_dist_opponent") * opponent_reward_multiplier - features.get(player_id).get("projectile_dist_opponent") * player_reward_multiplier
+            return game_state.get(opponent_id).get("Projectile_dist_opponent") * opponent_reward_multiplier - game_state.get(player_id).get("projectile_dist_opponent") * player_reward_multiplier
 
     def plot_training(self):
         # plots the training progress
