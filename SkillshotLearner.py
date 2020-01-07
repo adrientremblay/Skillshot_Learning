@@ -25,27 +25,26 @@ class SkillshotLearner(object):
     def model_act(self, player_id, features, mutate_threshold):
         # checks threshold to see if model acts or random acts,
         # then takes features, feeds through model to find actions and performs them on model
-        pass
+        return 0  # also returns the features taken
 
     def model_train(self, epochs, mutate_threshold):
         # model plays the game and saves actions
         for epoch in range(epochs):
-            # reset the game
+            # reset the game and epoch data lists
             self.game.game_reset()
-            # reset the epoch data lists
-            epoch_game_state = []
+            current_epoch_progress = dict(epoch_game_state=[], epoch_actions=[])
 
             # enter game
             while self.game.game_live:
                 # get the game state
                 game_state = self.game.get_state()
 
-                # do actions
+                # do and save actions
                 for player_id in self.player_ids:
-                    self.model_act(player_id, self.prepare_features(game_state, player_id)[0], mutate_threshold)
+                    current_epoch_progress.get("epoch_actions").append(self.model_act(player_id, self.prepare_features(game_state, player_id)[0], mutate_threshold))
 
-                # save the game state  - possibly also save the get_board here to visualise model later
-                epoch_game_state.append(game_state)
+                # save the game state - possibly also save the get_board here to visualise model later
+                current_epoch_progress.get("epoch_game_state").append(game_state)
 
                 # tick the game
                 self.game.game_tick()
@@ -54,15 +53,15 @@ class SkillshotLearner(object):
             print("Epoch Completed")
             # prepare to fit by extracting rewards from epoch_game_state
             epoch_player_rewards = dict((player, []) for player in self.player_ids)
-            for game_state in epoch_game_state:
+            for game_state in current_epoch_progress.get("epoch_game_state"):
                 for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
                     epoch_player_rewards.get(player_id).append(self.calculate_reward(game_state, player_id, opponent_id))
 
             # fit model
             player_features, player_targets = [], []
             for player_id in self.player_ids:
-                player_features + self.prepare_features(epoch_game_state, player_id)  # merge lists
-                player_targets + self.prepare_targets(epoch_player_rewards.get(player_id), player_id)  # merge lists
+                player_features + self.prepare_features(current_epoch_progress.get("epoch_game_state"), player_id)
+                player_targets + self.prepare_targets(epoch_player_rewards.get(player_id), player_id)
             self.model_fit(player_features, player_targets)  # fit can be called a single time
 
         # after all epochs are completed, print overall performance
