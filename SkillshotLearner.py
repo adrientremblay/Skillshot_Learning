@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 
 from SkillshotGame import SkillshotGame
@@ -25,6 +27,7 @@ class SkillshotLearner(object):
     def model_act(self, player_id, features, mutate_threshold):
         # checks threshold to see if model acts or random acts,
         # then takes features, feeds through model to find actions and performs them on model
+        np.
         return 0  # also returns the features taken
 
     def model_train(self, epochs, mutate_threshold):
@@ -41,7 +44,9 @@ class SkillshotLearner(object):
 
                 # do and save actions
                 for player_id in self.player_ids:
-                    current_epoch_progress.get("epoch_actions").append(self.model_act(player_id, self.prepare_features(game_state, player_id)[0], mutate_threshold))
+                    current_epoch_progress.get("epoch_actions").append(self.model_act(player_id,
+                                                                       self.prepare_features(game_state, player_id)[0],
+                                                                       mutate_threshold))
 
                 # save the game state - possibly also save the get_board here to visualise model later
                 current_epoch_progress.get("epoch_game_state").append(game_state)
@@ -51,6 +56,7 @@ class SkillshotLearner(object):
 
             # after each epoch ends, print epoch performance
             print("Epoch Completed")
+
             # prepare to fit by extracting rewards from epoch_game_state
             epoch_player_rewards = dict((player, []) for player in self.player_ids)
             for game_state in current_epoch_progress.get("epoch_game_state"):
@@ -69,10 +75,16 @@ class SkillshotLearner(object):
         # save model
         self.model_save()
 
-    def model_fit(self, features, targets):
+    def model_fit(self, features, targets, batch_size=16):
         # after each game is played, fit the model
         # shuffle features, targets and train with lower batch size for increased generalisation
-        pass
+        assert len(features) == len(targets)
+        zipped = zip(features, targets)  # zip up to pair values
+        random.shuffle(zipped)  # shuffle zipped pairs
+        features, targets = zip(*zipped)  # unzip
+
+        # fit model with batch size arg
+        self.model.fit(features, targets, batch_size=batch_size, verbose=1)
 
     @staticmethod
     def prepare_features(features, player_id):
@@ -116,3 +128,4 @@ class SkillshotLearner(object):
     def replay_training(self, boards):
         # takes list of boards and displays them using pygame to visualise training afterwards
         pass
+
