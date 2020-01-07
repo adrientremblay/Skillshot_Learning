@@ -16,6 +16,7 @@ class SkillshotGame(object):
 
         self.ticks = 0
         self.game_live = True
+        self.game_winner = 0
 
     def get_board(self):
         board = self.board.copy()
@@ -58,18 +59,22 @@ class SkillshotGame(object):
                 # manually go through the 4 combinations
                 if player_left <= projectile_right <= player_right and player_top <= projectile_top <= player_bottom:
                     print("Player", player.id, "loss")
+                    self.game_winner = player.id
                     self.game_live = False
                     break
                 elif player_left <= projectile_right <= player_right and player_top <= projectile_bottom <= player_bottom:
                     print("Player", player.id, "loss")
+                    self.game_winner = player.id
                     self.game_live = False
                     break
                 elif player_left <= projectile_left <= player_right and player_top <= projectile_top <= player_bottom:
                     print("Player", player.id, "loss")
+                    self.game_winner = player.id
                     self.game_live = False
                     break
                 elif player_left <= projectile_left <= player_right and player_top <= projectile_bottom <= player_bottom:
                     print("Player", player.id, "loss")
+                    self.game_winner = player.id
                     self.game_live = False
                     break
 
@@ -116,7 +121,7 @@ class SkillshotGame(object):
     def get_state(self):
         # collects game state and returns a dict, containing 2 dicts (one for each player) as well as general features
         # first create the outer dict with general features
-        feature_dict = dict(game_live=self.game_live, ticks=self.ticks)
+        feature_dict = dict(game_live=self.game_live, ticks=self.ticks, game_winner=self.game_winner)
 
         # create a dict for each player with the player and projectile specific features
         for player, opponent_player in (self.player1, self.player2), (self.player2, self.player1):
@@ -136,6 +141,7 @@ class SkillshotGame(object):
                                        projectile_pos_y=player.projectile.pos[1],
                                        projectile_rotation=player.projectile.rotation,
                                        projectil_age=player.projectile.age,
+                                       projectile_valid=player.projectile.valid,
                                        projectile_dist_opponent=self.get_dist_point_point(player.projectile.pos, opponent_player.pos),
                                        projectile_future_collision_opponent=self.check_future_collision(player.projectile, opponent_player))
 
