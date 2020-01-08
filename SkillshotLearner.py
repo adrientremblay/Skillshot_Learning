@@ -14,9 +14,15 @@ class SkillshotLearner(object):
         self.game = SkillshotGame()
         self.player_ids = (1, 2)
 
+        # dir locations
         self.save_location = "training_models"
         self.model_dir_name = "models"
         self.training_progress_dir_name = "training_progress"
+
+        # model hyper params
+        self.model_param_mutate_threshold = 0.25
+        self.model_param_batch_size = 16
+        self.model_param_game_tick_limit = 10000
 
     def model_define(self):
         # defines and creates a model
@@ -64,10 +70,10 @@ class SkillshotLearner(object):
         pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
         print("Saved.")
 
-    def model_act(self, player_id, game_state, mutate_threshold):
+    def model_act(self, player_id, game_state):
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
-        if np.random.rand() > mutate_threshold:
+        if np.random.rand() > self.model_param_mutate_threshold:
             # prepare features for the model, extract from list with length 1
             features = self.prepare_features(game_state, player_id)[0]
             # take prepared features, feed through model to find actions and performs them on model
@@ -84,7 +90,7 @@ class SkillshotLearner(object):
         # also return the model output or the random model imitation output
         return predictions
 
-    def model_train(self, epochs, mutate_threshold, game_tick_limit=10000):
+    def model_train(self, epochs):
         # main training loop for model
         
         # create the epoch-persistent progress dicts
@@ -101,14 +107,14 @@ class SkillshotLearner(object):
                 game_state = self.game.get_state()
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    current_epoch_progress.get("actions").append(self.model_act(player_id, game_state, mutate_threshold))
+                    current_epoch_progress.get("actions").append(self.model_act(player_id, game_state))
                 # save the game state - possibly also save the get_board here to visualise model later
                 current_epoch_progress.get("game_state").append(game_state)
                 # tick the game
                 self.game.game_tick()
                 # check if the game has reached the game_tick_limit
                 # useful in early training stages where the model is untrained
-                if self.game.ticks == game_tick_limit:
+                if self.game.ticks == self.model_param_game_tick_limit:
                     print("Tick limit Reached.")
                     break
 
@@ -137,7 +143,7 @@ class SkillshotLearner(object):
         self.model_save(epochs, total_epoch_progress)
         print("model_train done.")
 
-    def model_fit(self, features, targets, batch_size=16):
+    def model_fit(self, features, targets):
         # after each game is played, fit the model
         # shuffle features, targets and train with lower batch size for increased generalisation
         assert len(features) == len(targets)
@@ -146,7 +152,7 @@ class SkillshotLearner(object):
         features, targets = zip(*zipped)  # unzip
 
         # fit model with batch size arg
-        self.model.fit(features, targets, batch_size=batch_size, verbose=1)
+        self.model.fit(features, targets, batch_size=self.model_param_batch_size, verbose=1)
 
     @staticmethod
     def prepare_features(game_state, player_id):
