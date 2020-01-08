@@ -73,7 +73,7 @@ class SkillshotLearner(object):
         # also return the model output or the random model imitation output
         return predictions
 
-    def model_train(self, epochs, mutate_threshold):
+    def model_train(self, epochs, mutate_threshold, game_tick_limit=10000):
         # main training loop for model
         
         # create the epoch-persistent progress dicts
@@ -98,6 +98,12 @@ class SkillshotLearner(object):
 
                 # tick the game
                 self.game.game_tick()
+
+                # check if the game has reached the game_tick_limit
+                # useful in early training stages where the model is untrained
+                if self.game.ticks == game_tick_limit:
+                    print("Tick limit Reached.")
+                    break
 
             # game ends, fitting begins
             # prepare to fit by extracting rewards from game_state in current_epoch_progress
