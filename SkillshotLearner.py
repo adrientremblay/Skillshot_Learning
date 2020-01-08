@@ -1,6 +1,7 @@
 import random
 import os
 
+import keras
 import numpy as np
 import pandas as pd
 
@@ -21,9 +22,18 @@ class SkillshotLearner(object):
         # defines and creates a model
         pass
 
-    def model_load(self, load_epoch=-1):
+    def model_load(self, load_index=-1):
         # loads a model from save location
-        pass
+        model_save_location = self.save_location + "/" + self.model_dir_name
+        files_list = os.listdir(model_save_location)
+        files_list.sort(key=lambda x: int(x.split("_"[1])))
+        if len(files_list) > 0:
+            self.model = keras.models.load_model(model_save_location + "/" + files_list[load_index])
+            self.model.summary()
+            return True
+        else:
+            print("Model Load Failed")
+            return False
 
     def model_save(self, epochs, total_progress):
         # saves a model to the save location
@@ -52,6 +62,7 @@ class SkillshotLearner(object):
         self.model.save(model_save_location + "/" + epoch_name + "_model.h5")
         # save progress using pandas to_csv with append mode
         pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
+        print("Saved.")
 
     def model_act(self, player_id, game_state, mutate_threshold):
         # checks threshold to see if model acts or random acts,
