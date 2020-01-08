@@ -73,6 +73,7 @@ class SkillshotLearner(object):
     def model_act(self, player_id, game_state):
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
+        # TODO add noise to the parametrised predictions by the model
         if np.random.rand() > self.model_param_mutate_threshold:
             # prepare features for the model, extract from list with length 1
             features = self.prepare_features(game_state, player_id)[0]
