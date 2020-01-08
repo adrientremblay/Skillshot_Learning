@@ -16,7 +16,7 @@ class SkillshotGame(object):
 
         self.ticks = 0
         self.game_live = True
-        self.game_winner = 0
+        self.winner_id = 0
 
     def get_player_by_id(self, player_id):
         # takes player id and returns the player with matching id
@@ -68,22 +68,22 @@ class SkillshotGame(object):
                 # manually go through the 4 combinations
                 if player_left <= projectile_right <= player_right and player_top <= projectile_top <= player_bottom:
                     print("Player", player.id, "loss")
-                    self.game_winner = player.id
+                    self.winner_id = player.id
                     self.game_live = False
                     break
                 elif player_left <= projectile_right <= player_right and player_top <= projectile_bottom <= player_bottom:
                     print("Player", player.id, "loss")
-                    self.game_winner = player.id
+                    self.winner_id = player.id
                     self.game_live = False
                     break
                 elif player_left <= projectile_left <= player_right and player_top <= projectile_top <= player_bottom:
                     print("Player", player.id, "loss")
-                    self.game_winner = player.id
+                    self.winner_id = player.id
                     self.game_live = False
                     break
                 elif player_left <= projectile_left <= player_right and player_top <= projectile_bottom <= player_bottom:
                     print("Player", player.id, "loss")
-                    self.game_winner = player.id
+                    self.winner_id = player.id
                     self.game_live = False
                     break
 
@@ -130,7 +130,7 @@ class SkillshotGame(object):
     def get_state(self):
         # collects game state and returns a dict, containing 2 dicts (one for each player) as well as general features
         # first create the outer dict with general features
-        feature_dict = dict(game_live=self.game_live, ticks=self.ticks, game_winner=self.game_winner)
+        feature_dict = dict(game_live=self.game_live, ticks=self.ticks, game_winner=self.winner_id)
 
         # create a dict for each player with the player and projectile specific features
         for player, opponent_player in (self.player1, self.player2), (self.player2, self.player1):

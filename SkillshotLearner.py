@@ -1,16 +1,21 @@
 import random
+import os
 
 import numpy as np
+import pandas as pd
 
 from SkillshotGame import SkillshotGame
 
 
 class SkillshotLearner(object):
     def __init__(self):
-        self.actions = None
         self.model = None
         self.game = SkillshotGame()
         self.player_ids = (1, 2)
+
+        self.save_location = "training_models"
+        self.model_dir_name = "models"
+        self.training_progress_dir_name = "training_progress"
 
     def model_define(self):
         # defines and creates a model
@@ -20,9 +25,33 @@ class SkillshotLearner(object):
         # loads a model from save location
         pass
 
-    def model_save(self):
+    def model_save(self, epochs, total_progress):
         # saves a model to the save location
-        pass
+        # prepare path strings
+        model_save_location = self.save_location + "/" + self.model_dir_name
+        progress_save_location = self.save_location + "/" + self.training_progress_dir_name
+
+        # check if folders exist if not, create
+        if not os.path.exists(model_save_location):
+            os.makedirs(model_save_location)
+        if not os.path.exists(progress_save_location):
+            os.makedirs(progress_save_location)
+
+        # get the epochs elapsed
+        files_list = os.listdir(model_save_location)
+        files_list.sort(key=lambda x: int(x.split("_"[1])))
+
+        if len(files_list) == 0:
+            epoch_start = 0
+        else:
+            epoch_start = files_list[-1].split("_"[1]) + 1
+        epoch_end = epoch_start + epochs
+        epoch_name = str(epoch_start) + "_" + str(epoch_end)
+
+        # save model to dir with name
+        self.model.save(model_save_location + "/" + epoch_name + "_model.h5")
+        # save progress using pandas to_csv with append mode
+        pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
 
     def model_act(self, player_id, game_state, mutate_threshold):
         # checks threshold to see if model acts or random acts,
@@ -45,11 +74,15 @@ class SkillshotLearner(object):
         return predictions
 
     def model_train(self, epochs, mutate_threshold):
-        # model plays the game and saves actions
+        # main training loop for model
+        
+        # create the epoch-persistent progress dicts
+        total_epoch_progress = dict(epoch_ticks=[], epoch_winner=[])
+
         for epoch in range(epochs):
             # reset the game and epoch data lists
             self.game.game_reset()
-            current_epoch_progress = dict(epoch_game_state=[], epoch_actions=[])
+            current_epoch_progress = dict(game_state=[], actions=[], player_rewards=dict((player, []) for player in self.player_ids))
 
             # enter game
             while self.game.game_live:
@@ -58,34 +91,39 @@ class SkillshotLearner(object):
 
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    current_epoch_progress.get("epoch_actions").append(self.model_act(player_id, game_state, mutate_threshold))
+                    current_epoch_progress.get("actions").append(self.model_act(player_id, game_state, mutate_threshold))
 
                 # save the game state - possibly also save the get_board here to visualise model later
-                current_epoch_progress.get("epoch_game_state").append(game_state)
+                current_epoch_progress.get("game_state").append(game_state)
 
                 # tick the game
                 self.game.game_tick()
 
-            # after each epoch ends, print epoch performance
-            print("Epoch Completed")
-
-            # prepare to fit by extracting rewards from epoch_game_state
-            epoch_player_rewards = dict((player, []) for player in self.player_ids)
-            for game_state in current_epoch_progress.get("epoch_game_state"):
+            # game ends, fitting begins
+            # prepare to fit by extracting rewards from game_state in current_epoch_progress
+            for game_state in current_epoch_progress.get("game_state"):
                 for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-                    epoch_player_rewards.get(player_id).append(self.calculate_reward(game_state, player_id, opponent_id))
+                    current_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state, player_id, opponent_id))
 
             # fit model
             player_features, player_targets = [], []
             for player_id in self.player_ids:
-                player_features + self.prepare_features(current_epoch_progress.get("epoch_game_state"), player_id)
-                player_targets + self.prepare_targets(epoch_player_rewards.get(player_id), player_id)
+                player_features + self.prepare_features(current_epoch_progress.get("game_state"), player_id)
+                player_targets + self.prepare_targets(current_epoch_progress.get("player_rewards").get(player_id), player_id)
             self.model_fit(player_features, player_targets)  # fit can be called a single time
+
+            # move the features and targets to epoch-persistent progress dict
+            total_epoch_progress.get("epoch_ticks").append(self.game.ticks)
+            total_epoch_progress.get("epoch_winner").append(self.game.winner_id)
+
+            # after each epoch ends, print epoch performance
+            print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game.ticks, self.game.winner_id))
 
         # after all epochs are completed, print overall performance
         print("Training Completed")
-        # save model
-        self.model_save()
+        # save model and finish
+        self.model_save(epochs, total_epoch_progress)
+        print("model_train done.")
 
     def model_fit(self, features, targets, batch_size=16):
         # after each game is played, fit the model
