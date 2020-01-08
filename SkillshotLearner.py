@@ -88,17 +88,13 @@ class SkillshotLearner(object):
             while self.game.game_live:
                 # get the game state
                 game_state = self.game.get_state()
-
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
                     current_epoch_progress.get("actions").append(self.model_act(player_id, game_state, mutate_threshold))
-
                 # save the game state - possibly also save the get_board here to visualise model later
                 current_epoch_progress.get("game_state").append(game_state)
-
                 # tick the game
                 self.game.game_tick()
-
                 # check if the game has reached the game_tick_limit
                 # useful in early training stages where the model is untrained
                 if self.game.ticks == game_tick_limit:
@@ -110,7 +106,6 @@ class SkillshotLearner(object):
             for game_state in current_epoch_progress.get("game_state"):
                 for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
                     current_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state, player_id, opponent_id))
-
             # fit model
             player_features, player_targets = [], []
             for player_id in self.player_ids:
