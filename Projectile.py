@@ -6,7 +6,7 @@ class Projectile(object):
                    [0, 1, 0],
                    [1, 0, 1]]
 
-    cooldown_max = 10
+    cooldown_max = 15
     speed_move = 5
 
     def __init__(self, location, board_dim):

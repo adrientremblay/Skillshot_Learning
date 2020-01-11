@@ -16,7 +16,7 @@ class SkillshotLearner(object):
         # environment
         self.game_environment = SkillshotGame()
         self.player_ids = (1, 2)
-        self.max_dist = (2*(250**2))**0.5
+        self.max_dist_normaliser = (2 * (250 ** 2)) ** 0.5
 
         # dir locations
         self.save_location = "training_models"
@@ -240,8 +240,11 @@ class SkillshotLearner(object):
         # takes a list of states and calculates the reward or q-value for each state
         # returning a list of dicts with rewards for each player
 
-        # also possibly for every projectile firing tick,
-        # assign a reward for the total performance of the projectile over its lifespan
+        # calculate the projectile distances for each player for each game_state beforehand
+        game_states_distances = []
+        for game_state in game_states:
+            dist_list = [game_state.get(player_id).get("Projectile_dist_opponent") for player_id in self.player_ids]
+            game_states_distances.append(dist_list)
 
         rewards = []
         for game_state_index, game_state in enumerate(game_states):
@@ -257,8 +260,6 @@ class SkillshotLearner(object):
                 # punish loosing at current tick - get loser id
                 loser_id = [player_id for player_id in self.player_ids if player_id is not winner_id][0]
 
-            # calculate the distances for each player
-            dist_list = [game_state.get(player_id).get("Projectile_dist_opponent") for player_id in self.player_ids]
             for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
                 reward_multi = base_reward_multiplier
 
@@ -266,14 +267,24 @@ class SkillshotLearner(object):
                 if game_state.get(player_id).get("projectile_future_collision_opponent"):
                     # decrease multiplier of your projectile's distance
                     reward_multi = base_reward_multiplier - on_target_multiplier_reduction  # results in 0.5
+
                 # check if player is the losing player,
                 if player_id == loser_id:
                     reward_multi = base_reward_multiplier + loss_reward_multiplier  # results in 2.75
 
+                # check if the projectile is about to expire / new projectile being fired next action 0 or 1, needs test
+                if game_state.get("projectile_cooldown") == 0:
+                    # get the best performance of the projectile over it's lifespan and factor in
+                    start_index = game_state_index - game_state.get("projectile_age")
+                    min_dist = min(game_states_distances[start_index:game_state_index])
+                else:
+                    min_dist = 0
+
                 # calculate the difference of dists - +1 for indexing on dist_list - bonus for being on target
                 # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
                 # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
-                player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) / self.max_dist
+                dist_list = game_states_distances[game_state_index]  # get the right pair of distances
+                player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) / self.max_dist_normaliser
                 state_reward[player_id] = player_reward
             rewards.append(state_reward)
         return rewards
