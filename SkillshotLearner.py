@@ -257,24 +257,24 @@ class SkillshotLearner(object):
                 # punish loosing at current tick - get loser id
                 loser_id = [player_id for player_id in self.player_ids if player_id is not winner_id][0]
 
-                # calculate the distances for each player
-                dist_list = [game_state.get(player_id).get("Projectile_dist_opponent") for player_id in self.player_ids]
-                for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-                    reward_multi = base_reward_multiplier
+            # calculate the distances for each player
+            dist_list = [game_state.get(player_id).get("Projectile_dist_opponent") for player_id in self.player_ids]
+            for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
+                reward_multi = base_reward_multiplier
 
-                    # check is the projectile is currently on target
-                    if game_state.get(player_id).get("projectile_future_collision_opponent"):
-                        # decrease multiplier of your projectile's distance
-                        reward_multi = base_reward_multiplier - on_target_multiplier_reduction  # results in 0.5
-                    # check if player is the losing player,
-                    if player_id == loser_id:
-                        reward_multi = base_reward_multiplier + loss_reward_multiplier  # results in 2.75
+                # check is the projectile is currently on target
+                if game_state.get(player_id).get("projectile_future_collision_opponent"):
+                    # decrease multiplier of your projectile's distance
+                    reward_multi = base_reward_multiplier - on_target_multiplier_reduction  # results in 0.5
+                # check if player is the losing player,
+                if player_id == loser_id:
+                    reward_multi = base_reward_multiplier + loss_reward_multiplier  # results in 2.75
 
-                    # calculate the difference of dists - +1 for indexing on dist_list - bonus for being on target
-                    # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
-                    # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
-                    player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) / self.max_dist
-                    state_reward[player_id] = player_reward
+                # calculate the difference of dists - +1 for indexing on dist_list - bonus for being on target
+                # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
+                # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
+                player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) / self.max_dist
+                state_reward[player_id] = player_reward
             rewards.append(state_reward)
         return rewards
 
