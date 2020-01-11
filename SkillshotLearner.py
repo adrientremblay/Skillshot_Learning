@@ -157,43 +157,42 @@ class SkillshotLearner(object):
         total_epoch_progress = dict(epoch_ticks=[], epoch_winner=[])
 
         for epoch in range(epochs):
-            # reset the game and epoch data lists
+            # reset the game and epoch data lists TODO add reset to random positions inside SkillshotGame
             self.game_environment.game_reset()
             cur_epoch_progress = dict(game_state=[],
-                                      actions=[],
+                                      actions=dict((player, []) for player in self.player_ids),
                                       player_rewards=dict((player, []) for player in self.player_ids))
 
-            # enter game
-            while self.game_environment.game_live:
-                # get the game state
-                game_state = self.game_environment.get_state()
+            # get starting state
+            game_state = self.game_environment.get_state()
+            cur_epoch_progress.get("game_state").append(game_state)
+
+            # enter training loop
+            while self.game_environment.game_live and self.game_environment.ticks <= self.model_param_game_tick_limit:
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    cur_epoch_progress.get("actions").append(self.model_act(player_id, game_state))
-                # save the game state - possibly also save the get_board here to visualise model later
-                cur_epoch_progress.get("game_state").append(game_state)
+                    cur_epoch_progress.get("actions").get(player_id).append(self.model_act(player_id, game_state))
                 # tick the game
                 self.game_environment.game_tick()
-                # check if the game has reached the game_tick_limit
-                # useful in early training stages where the model is untrained
-                if self.game_environment.ticks == self.model_param_game_tick_limit:
-                    print("Tick limit Reached.")
-                    break
+                # get and save the resultant game state - and possibly the get_board
+                game_state = self.game_environment.get_state()
+                cur_epoch_progress.get("game_state").append(game_state)
 
             # game ends, fitting begins
-            # prepare to fit by extracting rewards from game_state in cur_epoch_progress
+
+            # prepare rewards
             for game_state in cur_epoch_progress.get("game_state"):
                 for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-                    cur_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state,
-                                                                                                         player_id,
-                                                                                                         opponent_id))
-            # fit model
+                    cur_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state))
+
+            # prepare model features
             player_features, player_targets = [], []
             for player_id in self.player_ids:
                 player_features + self.prepare_features(cur_epoch_progress.get("game_state"), player_id)
-                player_targets + self.prepare_targets(cur_epoch_progress.get("player_rewards").get(player_id),
-                                                      player_id)
-            self.model_fit(player_features, player_targets)  # fit can be called a single time
+                player_targets + self.prepare_targets(cur_epoch_progress.get("player_rewards").get(player_id), player_id)
+
+            # fit model
+            self.models_fit(player_features, player_targets)  # fit can be called a single time
 
             # move the features and targets to epoch-persistent progress dict
             total_epoch_progress.get("epoch_ticks").append(self.game_environment.ticks)
@@ -210,9 +209,10 @@ class SkillshotLearner(object):
         self.save_training_progress(total_epoch_progress)
         print("model_train done.")
 
-    def model_fit(self, features, targets):
+    def models_fit(self, features, targets):
         # TODO - possibly also take in the get_state dicts
-        # after each game is played, fit the model
+        # fits the critic model, then transfers the weights to the actor model
+
         # shuffle features, targets and train with lower batch size for increased generalisation
         assert len(features) == len(targets)
         zipped = zip(features, targets)  # zip up to pair values
@@ -234,34 +234,34 @@ class SkillshotLearner(object):
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         return [0]  # returns list
 
-    @staticmethod
-    def calculate_reward(game_state, player_id, opponent_id, on_target_multiplier_change=0.5):
+    def calculate_reward(self, game_state, player_id, opponent_id, on_target_multiplier_change=0.25):
+        # takes a list of states and calculates the reward or q-value for each state
+        # returning a dict with rewards for each player
+
         # TODO change method to calculate the reward for both players at once, and return in list/tuple form
         # TODO change method to also handling reward attribution problem
-        # TODO when projectiles are fired give reward equliv to perf of proj over the proj's lifespan
-        # TODO move on_target_multiplier_change to class variable
-        # calculates the reward or q-value from the given state
-        # for model training against self, the dict will need to be flipped to keep consistent "self" player
-        if game_state.get("game_winner") == player_id:
-            # reward winning
-            return np.inf
-        elif game_state.get("game_winner") == opponent_id:
-            # punish loosing
-            return -np.inf
-        elif not game_state.get(player_id).get("projectile_valid"):
-            # punish invalid projectile
-            return -np.inf
-        else:
-            # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
-            # add extra multiplier if the projectile is currently on target
-            opponent_reward_multiplier, player_reward_multiplier = 1, 1
-            if game_state.get(player_id).get("projectile_future_collision_opponent"):
-                player_reward_multiplier -= on_target_multiplier_change
-            if game_state.get(opponent_id).get("projectile_future_collision_opponent"):
-                opponent_reward_multiplier -= on_target_multiplier_change
-            return game_state.get(opponent_id).get(
-                "Projectile_dist_opponent") * opponent_reward_multiplier - game_state.get(player_id).get(
-                "projectile_dist_opponent") * player_reward_multiplier
+        # when projectiles are fired give reward equliv to perf of proj over the proj's lifespan
+        # move on_target_multiplier_change to class variable
+
+        reward_dict = dict()
+        for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
+            # punish/reward win states
+            if game_state.get("game_winner") == player_id:
+                # reward winning projectile's firing tick
+                pass
+            elif game_state.get("game_winner") == opponent_id:
+                # punish loosing
+                pass
+            else:
+                # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
+                # add extra multiplier if the projectile is currently on target
+                # possibly ignore own projectile because it's out of control?
+                opponent_reward_multiplier, player_reward_multiplier = 1, 1
+                if game_state.get(player_id).get("projectile_future_collision_opponent"):
+                    player_reward_multiplier -= on_target_multiplier_change
+                if game_state.get(opponent_id).get("projectile_future_collision_opponent"):
+                    opponent_reward_multiplier -= on_target_multiplier_change
+                game_state.get(opponent_id).get("Projectile_dist_opponent") * opponent_reward_multiplier - game_state.get(player_id).get("projectile_dist_opponent") * player_reward_multiplier
 
     def plot_training(self):
         # plots the training progress
