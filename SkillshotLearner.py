@@ -16,6 +16,7 @@ class SkillshotLearner(object):
         # environment
         self.game_environment = SkillshotGame()
         self.player_ids = (1, 2)
+        self.max_dist = (2*(250**2))**0.5
 
         # dir locations
         self.save_location = "training_models"
@@ -180,10 +181,11 @@ class SkillshotLearner(object):
 
             # game ends, fitting begins
 
-            # prepare rewards
-            for game_state in cur_epoch_progress.get("game_state"):
-                for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-                    cur_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state))
+            # prepare rewards - initial state has no reward
+            rewards = self.calculate_reward(cur_epoch_progress.get("game_state")[1:])
+            for reward in rewards:
+                for player_id in self.player_ids:
+                    cur_epoch_progress.get("player_rewards").get(player_id).append(reward.get(player_id))
 
             # prepare model features
             player_features, player_targets = [], []
@@ -234,34 +236,47 @@ class SkillshotLearner(object):
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         return [0]  # returns list
 
-    def calculate_reward(self, game_state, player_id, opponent_id, on_target_multiplier_change=0.25):
+    def calculate_reward(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2, base_reward_multiplier=0.75):
         # takes a list of states and calculates the reward or q-value for each state
-        # returning a dict with rewards for each player
+        # returning a list of dicts with rewards for each player
 
-        # TODO change method to calculate the reward for both players at once, and return in list/tuple form
-        # TODO change method to also handling reward attribution problem
-        # when projectiles are fired give reward equliv to perf of proj over the proj's lifespan
-        # move on_target_multiplier_change to class variable
+        # also possibly for every projectile firing tick,
+        # assign a reward for the total performance of the projectile over its lifespan
 
-        reward_dict = dict()
-        for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-            # punish/reward win states
-            if game_state.get("game_winner") == player_id:
-                # reward winning projectile's firing tick
-                pass
-            elif game_state.get("game_winner") == opponent_id:
-                # punish loosing
-                pass
-            else:
-                # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
-                # add extra multiplier if the projectile is currently on target
-                # possibly ignore own projectile because it's out of control?
-                opponent_reward_multiplier, player_reward_multiplier = 1, 1
-                if game_state.get(player_id).get("projectile_future_collision_opponent"):
-                    player_reward_multiplier -= on_target_multiplier_change
-                if game_state.get(opponent_id).get("projectile_future_collision_opponent"):
-                    opponent_reward_multiplier -= on_target_multiplier_change
-                game_state.get(opponent_id).get("Projectile_dist_opponent") * opponent_reward_multiplier - game_state.get(player_id).get("projectile_dist_opponent") * player_reward_multiplier
+        rewards = []
+        for game_state_index, game_state in enumerate(game_states):
+            state_reward = dict()
+            loser_id = 0
+
+            # first check if the game has been won
+            if game_state.get("game_winner") is not 0:
+                # reward winner at projectile's firing tick
+                winner_id = game_state.get("game_winner")
+                projectile_fired_tick = game_state_index - game_state.get(winner_id).get("projectile_age")
+                rewards[projectile_fired_tick][winner_id] = 1
+                # punish loosing at current tick - get loser id
+                loser_id = [player_id for player_id in self.player_ids if player_id is not winner_id][0]
+
+                # calculate the distances for each player
+                dist_list = [game_state.get(player_id).get("Projectile_dist_opponent") for player_id in self.player_ids]
+                for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
+                    reward_multi = base_reward_multiplier
+
+                    # check is the projectile is currently on target
+                    if game_state.get(player_id).get("projectile_future_collision_opponent"):
+                        # decrease multiplier of your projectile's distance
+                        reward_multi = base_reward_multiplier - on_target_multiplier_reduction  # results in 0.5
+                    # check if player is the losing player,
+                    if player_id == loser_id:
+                        reward_multi = base_reward_multiplier + loss_reward_multiplier  # results in 2.75
+
+                    # calculate the difference of dists - +1 for indexing on dist_list - bonus for being on target
+                    # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
+                    # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
+                    player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) / self.max_dist
+                    state_reward[player_id] = player_reward
+            rewards.append(state_reward)
+        return rewards
 
     def plot_training(self):
         # plots the training progress

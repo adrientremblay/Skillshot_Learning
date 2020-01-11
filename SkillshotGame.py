@@ -149,7 +149,7 @@ class SkillshotGame(object):
                                        projectile_pos_x=player.projectile.pos[0],
                                        projectile_pos_y=player.projectile.pos[1],
                                        projectile_rotation=player.projectile.rotation,
-                                       projectil_age=player.projectile.age,
+                                       projectile_age=player.projectile.age,
                                        projectile_valid=player.projectile.valid,
                                        projectile_dist_opponent=self.get_dist_point_point(player.projectile.pos, opponent_player.pos),
                                        projectile_future_collision_opponent=self.check_future_collision(player.projectile, opponent_player))
