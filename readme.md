@@ -10,5 +10,4 @@ however, loosing tick should be the tick that the projectile hits on (final tick
 
 for exploration, use state space noise instead of action state noise 
 this means that the inputs to the model are altered instead of the outputs, leading to more effective exploration
-this noise is actually added within the model
 More information can be found https://openai.com/blog/better-exploration-with-parameter-noise/

@@ -4,15 +4,17 @@ import os
 import keras
 import numpy as np
 import pandas as pd
+from keras import Input, Model
+from keras.layers import Dense, GaussianNoise, Concatenate
 
 from SkillshotGame import SkillshotGame
 
 
 class SkillshotLearner(object):
     def __init__(self):
-        self.actor = None
-        self.critic = None
-        self.game = SkillshotGame()
+
+        # environment
+        self.game_environment = SkillshotGame()
         self.player_ids = (1, 2)
 
         # dir locations
@@ -21,19 +23,58 @@ class SkillshotLearner(object):
         self.critic_dir_name = "critic"
         self.training_progress_dir_name = "training_progress"
 
-        # model hyper params
+        # model
+        self.model_actor = None
+        self.model_critic = None
+        self.dim_state_space = 5
+        self.dim_action_space = 2
+
+        # model hyper-params
         # self.model_param_mutate_threshold = 0.25  # using state space noise instead of action space noise
         self.model_param_batch_size = 16
         self.model_param_game_tick_limit = 10000
 
-    def model_define(self):
-        # defines and creates a model
-        # kernel initialiser 0
-        pass
+    def model_define_actor(self):
+        # define an actor model
+
+        # inputs
+        state_input = Input(self.dim_state_space)
+
+        layer_model = Dense(256, activation="relu")(state_input)
+        layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training TODO needed?
+        layer_model = Dense(128, activation="relu")(layer_model)
+        layer_model = GaussianNoise(1.0)(layer_model)
+
+        # outputs
+        # tanh activation is from -1 to 1, which is the correct range for the moves
+        layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="zeros")
+
+        # compile model
+        actor = Model(state_input, layer_output)
+        actor.compile(optimizer="adam", loss="mse")  # using default learning rate
+
+        self.model_actor = actor
+
+    def model_define_critic(self):
+        # define a critic model, which predicts the resultant q-value from the actor's action and the state
+
+        # inputs
+        state_input = Input(self.dim_state_space)
+        actor_input = Input(self.dim_action_space)  # same shape as the actor's output layer
+
+        layer_model = Dense(256, activation="relu")(state_input)
+        layer_model = Concatenate([layer_model, actor_input])  # concat the actions with the state
+        layer_model = Dense(128, activation="relu")(layer_model)
+
+        # outputs
+        # only the q-value (shape 1), and linear activation to be able to reach all q-values
+        layer_output = Dense(1, activation="linear", kernel_initializer="zeros")
+
+        self.model_critic = Model([state_input, actor_input], layer_output)
 
     def load_actor_critic_models(self, load_index=-1):
         # loads actor and critic models from save locations
-        for model_location, dir_name in zip((self.actor, self.critic), (self.actor_dir_name, self.critic_dir_name)):
+        for model_location, dir_name in zip((self.model_actor, self.model_critic), (self.actor_dir_name, self.critic_dir_name)):
             model_save_location = self.save_location + "/" + dir_name
             files_list = os.listdir(model_save_location)
             files_list.sort(key=lambda x: int(x.split("_"[1])))
@@ -48,7 +89,7 @@ class SkillshotLearner(object):
 
     def save_actor_critic_models(self, epochs):
         # saves actor and critic models
-        for model, dir_name in zip((self.actor, self.critic), (self.actor_dir_name, self.critic_dir_name)):
+        for model, dir_name in zip((self.model_actor, self.model_critic), (self.actor_dir_name, self.critic_dir_name)):
             # prepare path strings
             model_save_location = self.save_location + "/" + dir_name
 
@@ -86,17 +127,17 @@ class SkillshotLearner(object):
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
 
-        # instead, use state space noise - which is added within the model (see readme)
+        # instead, use state space noise
         # prepare features for the actor, extract from list with length 1
         features = self.prepare_features(game_state, player_id)[0]
         # take prepared features, pass to actor model
-        predictions = self.actor.predict(features)
+        predictions = self.model_actor.predict(features)
 
         # perform the predicted action(s)
         # move_shoot_projectile is attempted every time to simply model
-        self.game.get_player_by_id(player_id).move_direction_float(predictions[0])
-        self.game.get_player_by_id(player_id).move_look_float(predictions[1])
-        self.game.get_player_by_id(player_id).move_shoot_projectile()
+        self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0])
+        self.game_environment.get_player_by_id(player_id).move_look_float(predictions[1])
+        self.game_environment.get_player_by_id(player_id).move_shoot_projectile()
 
         # also return the actor output
         return predictions
@@ -109,23 +150,23 @@ class SkillshotLearner(object):
 
         for epoch in range(epochs):
             # reset the game and epoch data lists
-            self.game.game_reset()
+            self.game_environment.game_reset()
             current_epoch_progress = dict(game_state=[], actions=[], player_rewards=dict((player, []) for player in self.player_ids))
 
             # enter game
-            while self.game.game_live:
+            while self.game_environment.game_live:
                 # get the game state
-                game_state = self.game.get_state()
+                game_state = self.game_environment.get_state()
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
                     current_epoch_progress.get("actions").append(self.model_act(player_id, game_state))
                 # save the game state - possibly also save the get_board here to visualise model later
                 current_epoch_progress.get("game_state").append(game_state)
                 # tick the game
-                self.game.game_tick()
+                self.game_environment.game_tick()
                 # check if the game has reached the game_tick_limit
                 # useful in early training stages where the model is untrained
-                if self.game.ticks == self.model_param_game_tick_limit:
+                if self.game_environment.ticks == self.model_param_game_tick_limit:
                     print("Tick limit Reached.")
                     break
 
@@ -142,11 +183,11 @@ class SkillshotLearner(object):
             self.model_fit(player_features, player_targets)  # fit can be called a single time
 
             # move the features and targets to epoch-persistent progress dict
-            total_epoch_progress.get("epoch_ticks").append(self.game.ticks)
-            total_epoch_progress.get("epoch_winner").append(self.game.winner_id)
+            total_epoch_progress.get("epoch_ticks").append(self.game_environment.ticks)
+            total_epoch_progress.get("epoch_winner").append(self.game_environment.winner_id)
 
             # after each epoch ends, print epoch performance
-            print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game.ticks, self.game.winner_id))
+            print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game_environment.ticks, self.game_environment.winner_id))
 
         # after all epochs are completed, print overall performance
         print("Training Completed")
@@ -156,7 +197,7 @@ class SkillshotLearner(object):
         print("model_train done.")
 
     def model_fit(self, features, targets):
-        # TODO
+        # TODO - possibly also take in the get_state dicts
         # after each game is played, fit the model
         # shuffle features, targets and train with lower batch size for increased generalisation
         assert len(features) == len(targets)
@@ -207,6 +248,6 @@ class SkillshotLearner(object):
         # plots the training progress
         pass
 
-    def replay_training(self, boards):
+    def display_training_replay(self, boards):
         # takes list of boards and displays them using pygame to visualise training afterwards
         pass
