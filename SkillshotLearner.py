@@ -10,85 +10,95 @@ from SkillshotGame import SkillshotGame
 
 class SkillshotLearner(object):
     def __init__(self):
-        self.model = None
+        self.actor = None
+        self.critic = None
         self.game = SkillshotGame()
         self.player_ids = (1, 2)
 
         # dir locations
         self.save_location = "training_models"
-        self.model_dir_name = "models"
+        self.actor_dir_name = "actor"
+        self.critic_dir_name = "critic"
         self.training_progress_dir_name = "training_progress"
 
         # model hyper params
-        self.model_param_mutate_threshold = 0.25
+        # self.model_param_mutate_threshold = 0.25  # using state space noise instead of action space noise
         self.model_param_batch_size = 16
         self.model_param_game_tick_limit = 10000
 
     def model_define(self):
         # defines and creates a model
+        # kernel initialiser 0
         pass
 
-    def model_load(self, load_index=-1):
-        # loads a model from save location
-        model_save_location = self.save_location + "/" + self.model_dir_name
-        files_list = os.listdir(model_save_location)
-        files_list.sort(key=lambda x: int(x.split("_"[1])))
-        if len(files_list) > 0:
-            self.model = keras.models.load_model(model_save_location + "/" + files_list[load_index])
-            self.model.summary()
-            return True
+    def load_actor_critic_models(self, load_index=-1):
+        # loads actor and critic models from save locations
+        for model_location, dir_name in zip((self.actor, self.critic), (self.actor_dir_name, self.critic_dir_name)):
+            model_save_location = self.save_location + "/" + dir_name
+            files_list = os.listdir(model_save_location)
+            files_list.sort(key=lambda x: int(x.split("_"[1])))
+            if len(files_list) > 0:
+                model_location = keras.models.load_model(model_save_location + "/" + files_list[load_index])
+                model_location.summary()
+            else:
+                print("Failed to load: ", model_save_location)
+                return False
         else:
-            print("Model Load Failed")
-            return False
+            return True
 
-    def model_save(self, epochs, total_progress):
-        # saves a model to the save location
-        # prepare path strings
-        model_save_location = self.save_location + "/" + self.model_dir_name
+    def save_actor_critic_models(self, epochs):
+        # saves actor and critic models
+        for model, dir_name in zip((self.actor, self.critic), (self.actor_dir_name, self.critic_dir_name)):
+            # prepare path strings
+            model_save_location = self.save_location + "/" + dir_name
+
+            # check if folders exist if not, create
+            if not os.path.exists(model_save_location):
+                os.makedirs(model_save_location)
+
+            # get the epochs elapsed
+            files_list = os.listdir(model_save_location)
+            files_list.sort(key=lambda x: int(x.split("_"[1])))
+            if len(files_list) == 0:
+                epoch_start = 0
+            else:
+                epoch_start = files_list[-1].split("_"[1]) + 1
+            epoch_end = epoch_start + epochs
+            epoch_name = str(epoch_start) + "_" + str(epoch_end)
+
+            # save model to dir with name
+            model.save(model_save_location + "/" + epoch_name + "_model.h5")
+        print("Actor and Critic Saved.")
+
+    def save_training_progress(self, total_progress):
         progress_save_location = self.save_location + "/" + self.training_progress_dir_name
 
         # check if folders exist if not, create
-        if not os.path.exists(model_save_location):
-            os.makedirs(model_save_location)
         if not os.path.exists(progress_save_location):
             os.makedirs(progress_save_location)
 
-        # get the epochs elapsed
-        files_list = os.listdir(model_save_location)
-        files_list.sort(key=lambda x: int(x.split("_"[1])))
-
-        if len(files_list) == 0:
-            epoch_start = 0
-        else:
-            epoch_start = files_list[-1].split("_"[1]) + 1
-        epoch_end = epoch_start + epochs
-        epoch_name = str(epoch_start) + "_" + str(epoch_end)
-
-        # save model to dir with name
-        self.model.save(model_save_location + "/" + epoch_name + "_model.h5")
         # save progress using pandas to_csv with append mode
         pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
-        print("Saved.")
+        print("Training Progress Saved")
 
     def model_act(self, player_id, game_state):
+        # for action space noise:
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
-        # TODO add noise to the parametrised predictions by the model
-        if np.random.rand() > self.model_param_mutate_threshold:
-            # prepare features for the model, extract from list with length 1
-            features = self.prepare_features(game_state, player_id)[0]
-            # take prepared features, feed through model to find actions and performs them on model
-            predictions = self.model.predict(features)
-        else:
-            # randomly generate actions, ensure shape is same as model output
-            predictions = [0]
 
-        # perform the generated or predicted action(s)
-        self.game.get_player_by_id(player_id).move_direction_float()
-        self.game.get_player_by_id(player_id).move_look_float()
+        # instead, use state space noise - which is added within the model (see readme)
+        # prepare features for the actor, extract from list with length 1
+        features = self.prepare_features(game_state, player_id)[0]
+        # take prepared features, pass to actor model
+        predictions = self.actor.predict(features)
+
+        # perform the predicted action(s)
+        # move_shoot_projectile is attempted every time to simply model
+        self.game.get_player_by_id(player_id).move_direction_float(predictions[0])
+        self.game.get_player_by_id(player_id).move_look_float(predictions[1])
         self.game.get_player_by_id(player_id).move_shoot_projectile()
 
-        # also return the model output or the random model imitation output
+        # also return the actor output
         return predictions
 
     def model_train(self, epochs):
@@ -141,10 +151,12 @@ class SkillshotLearner(object):
         # after all epochs are completed, print overall performance
         print("Training Completed")
         # save model and finish
-        self.model_save(epochs, total_epoch_progress)
+        self.save_actor_critic_models(epochs)
+        self.save_training_progress(total_epoch_progress)
         print("model_train done.")
 
     def model_fit(self, features, targets):
+        # TODO
         # after each game is played, fit the model
         # shuffle features, targets and train with lower batch size for increased generalisation
         assert len(features) == len(targets)
@@ -169,7 +181,8 @@ class SkillshotLearner(object):
 
     @staticmethod
     def calculate_reward(game_state, player_id, opponent_id, on_target_multiplier_change=0.5):
-        # calculates the reward from the given state
+        # TODO change method to calculate the reward for both players at once, and return in list/tuple form
+        # calculates the reward or q-value from the given state
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         if game_state.get("game_winner") == player_id:
             # reward winning
@@ -197,4 +210,3 @@ class SkillshotLearner(object):
     def replay_training(self, boards):
         # takes list of boards and displays them using pygame to visualise training afterwards
         pass
-
