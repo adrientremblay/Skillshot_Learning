@@ -237,6 +237,9 @@ class SkillshotLearner(object):
     @staticmethod
     def calculate_reward(game_state, player_id, opponent_id, on_target_multiplier_change=0.5):
         # TODO change method to calculate the reward for both players at once, and return in list/tuple form
+        # TODO change method to also handling reward attribution problem
+        # TODO when projectiles are fired give reward equliv to perf of proj over the proj's lifespan
+        # TODO move on_target_multiplier_change to class variable
         # calculates the reward or q-value from the given state
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         if game_state.get("game_winner") == player_id:
