@@ -35,7 +35,7 @@ class SkillshotLearner(object):
         self.model_param_game_tick_limit = 10000
 
     def model_define_actor(self):
-        # define an actor model
+        # define an actor model, which chooses actions based on the game's state
 
         # inputs
         state_input = Input(self.dim_state_space)
@@ -47,16 +47,17 @@ class SkillshotLearner(object):
 
         # outputs
         # tanh activation is from -1 to 1, which is the correct range for the moves
-        layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="zeros")
+        layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="zeros")(layer_model)
 
         # compile model
         actor = Model(state_input, layer_output)
         actor.compile(optimizer="adam", loss="mse")  # using default learning rate
+        actor.summary()
 
         self.model_actor = actor
 
     def model_define_critic(self):
-        # define a critic model, which predicts the resultant q-value from the actor's action and the state
+        # define a critic model, which predicts the resultant q-value from the actor's action and the game state
 
         # inputs
         state_input = Input(self.dim_state_space)
@@ -68,13 +69,19 @@ class SkillshotLearner(object):
 
         # outputs
         # only the q-value (shape 1), and linear activation to be able to reach all q-values
-        layer_output = Dense(1, activation="linear", kernel_initializer="zeros")
+        layer_output = Dense(1, activation="linear", kernel_initializer="zeros")(layer_model)
 
-        self.model_critic = Model([state_input, actor_input], layer_output)
+        # compile model
+        critic = Model([state_input, actor_input], layer_output)
+        critic.compile(optimizer="adam", loss="mse")  # using default learning rate
+        critic.summary()
+
+        self.model_critic = critic
 
     def load_actor_critic_models(self, load_index=-1):
         # loads actor and critic models from save locations
-        for model_location, dir_name in zip((self.model_actor, self.model_critic), (self.actor_dir_name, self.critic_dir_name)):
+        for model_location, dir_name in zip((self.model_actor, self.model_critic),
+                                            (self.actor_dir_name, self.critic_dir_name)):
             model_save_location = self.save_location + "/" + dir_name
             files_list = os.listdir(model_save_location)
             files_list.sort(key=lambda x: int(x.split("_"[1])))
@@ -89,7 +96,8 @@ class SkillshotLearner(object):
 
     def save_actor_critic_models(self, epochs):
         # saves actor and critic models
-        for model, dir_name in zip((self.model_actor, self.model_critic), (self.actor_dir_name, self.critic_dir_name)):
+        for model, dir_name in zip((self.model_actor, self.model_critic),
+                                   (self.actor_dir_name, self.critic_dir_name)):
             # prepare path strings
             model_save_location = self.save_location + "/" + dir_name
 
@@ -103,7 +111,7 @@ class SkillshotLearner(object):
             if len(files_list) == 0:
                 epoch_start = 0
             else:
-                epoch_start = files_list[-1].split("_"[1]) + 1
+                epoch_start = int(files_list[-1].split("_")[1]) + 1
             epoch_end = epoch_start + epochs
             epoch_name = str(epoch_start) + "_" + str(epoch_end)
 
@@ -144,14 +152,16 @@ class SkillshotLearner(object):
 
     def model_train(self, epochs):
         # main training loop for model
-        
+
         # create the epoch-persistent progress dicts
         total_epoch_progress = dict(epoch_ticks=[], epoch_winner=[])
 
         for epoch in range(epochs):
             # reset the game and epoch data lists
             self.game_environment.game_reset()
-            current_epoch_progress = dict(game_state=[], actions=[], player_rewards=dict((player, []) for player in self.player_ids))
+            cur_epoch_progress = dict(game_state=[],
+                                      actions=[],
+                                      player_rewards=dict((player, []) for player in self.player_ids))
 
             # enter game
             while self.game_environment.game_live:
@@ -159,9 +169,9 @@ class SkillshotLearner(object):
                 game_state = self.game_environment.get_state()
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    current_epoch_progress.get("actions").append(self.model_act(player_id, game_state))
+                    cur_epoch_progress.get("actions").append(self.model_act(player_id, game_state))
                 # save the game state - possibly also save the get_board here to visualise model later
-                current_epoch_progress.get("game_state").append(game_state)
+                cur_epoch_progress.get("game_state").append(game_state)
                 # tick the game
                 self.game_environment.game_tick()
                 # check if the game has reached the game_tick_limit
@@ -171,15 +181,18 @@ class SkillshotLearner(object):
                     break
 
             # game ends, fitting begins
-            # prepare to fit by extracting rewards from game_state in current_epoch_progress
-            for game_state in current_epoch_progress.get("game_state"):
+            # prepare to fit by extracting rewards from game_state in cur_epoch_progress
+            for game_state in cur_epoch_progress.get("game_state"):
                 for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-                    current_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state, player_id, opponent_id))
+                    cur_epoch_progress.get("player_rewards").get(player_id).append(self.calculate_reward(game_state,
+                                                                                                         player_id,
+                                                                                                         opponent_id))
             # fit model
             player_features, player_targets = [], []
             for player_id in self.player_ids:
-                player_features + self.prepare_features(current_epoch_progress.get("game_state"), player_id)
-                player_targets + self.prepare_targets(current_epoch_progress.get("player_rewards").get(player_id), player_id)
+                player_features + self.prepare_features(cur_epoch_progress.get("game_state"), player_id)
+                player_targets + self.prepare_targets(cur_epoch_progress.get("player_rewards").get(player_id),
+                                                      player_id)
             self.model_fit(player_features, player_targets)  # fit can be called a single time
 
             # move the features and targets to epoch-persistent progress dict
@@ -187,7 +200,8 @@ class SkillshotLearner(object):
             total_epoch_progress.get("epoch_winner").append(self.game_environment.winner_id)
 
             # after each epoch ends, print epoch performance
-            print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game_environment.ticks, self.game_environment.winner_id))
+            print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game_environment.ticks,
+                                                                             self.game_environment.winner_id))
 
         # after all epochs are completed, print overall performance
         print("Training Completed")
@@ -206,7 +220,7 @@ class SkillshotLearner(object):
         features, targets = zip(*zipped)  # unzip
 
         # fit model with batch size arg
-        self.model.fit(features, targets, batch_size=self.model_param_batch_size, verbose=1)
+        # self.model.fit(features, targets, batch_size=self.model_param_batch_size, verbose=1)
 
     @staticmethod
     def prepare_features(game_state, player_id):
@@ -242,7 +256,9 @@ class SkillshotLearner(object):
                 player_reward_multiplier -= on_target_multiplier_change
             if game_state.get(opponent_id).get("projectile_future_collision_opponent"):
                 opponent_reward_multiplier -= on_target_multiplier_change
-            return game_state.get(opponent_id).get("Projectile_dist_opponent") * opponent_reward_multiplier - game_state.get(player_id).get("projectile_dist_opponent") * player_reward_multiplier
+            return game_state.get(opponent_id).get(
+                "Projectile_dist_opponent") * opponent_reward_multiplier - game_state.get(player_id).get(
+                "projectile_dist_opponent") * player_reward_multiplier
 
     def plot_training(self):
         # plots the training progress
