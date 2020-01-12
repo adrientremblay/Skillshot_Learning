@@ -181,13 +181,14 @@ class SkillshotLearner(object):
 
             # game ends, fitting begins
 
-            # prepare rewards - initial state has no reward
+            # prepare rewards - initial state has no reward so ignore
             rewards = self.calculate_reward(cur_epoch_progress.get("game_state")[1:])
             for reward in rewards:
                 for player_id in self.player_ids:
                     cur_epoch_progress.get("player_rewards").get(player_id).append(reward.get(player_id))
 
-            # prepare model features
+            # prepare model features - final state is not used for training, so ignore
+            # TODO
             player_features, player_targets = [], []
             for player_id in self.player_ids:
                 player_features + self.prepare_features(cur_epoch_progress.get("game_state"), player_id)
