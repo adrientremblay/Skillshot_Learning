@@ -1,11 +1,13 @@
 import random
 import os
 
+import tensorflow as tf
 import keras
 import numpy as np
 import pandas as pd
 from keras import Input, Model
 from keras.layers import Dense, GaussianNoise, Concatenate
+from keras import backend as k
 
 from SkillshotGame import SkillshotGame
 
@@ -205,7 +207,7 @@ class SkillshotLearner(object):
                 game_state = self.game_environment.get_state()
                 cur_epoch_progress.get("game_state").append(game_state)
 
-            # game ends, fitting begins
+            # game ends, fitting preparation begins
 
             # prepare rewards - initial state has no reward so ignore
             rewards = self.calculate_rewards(cur_epoch_progress.get("game_state")[1:])
@@ -221,9 +223,8 @@ class SkillshotLearner(object):
                 training_actions + self.prepare_actions(cur_epoch_progress.get("player_actions"), player_id)
                 training_rewards + self.prepare_rewards(cur_epoch_progress.get("player_rewards"), player_id)
 
-            # assertions to ensure the training lists are all the right length and shape
+            # assertions to ensure the training lists have been split correctly
             assert (len(cur_epoch_progress.get("game_state")) - 1) * len(self.player_ids) == len(training_actions) == len(training_rewards)
-            assert len(training_states) == len(training_actions) == len(training_rewards)
 
             # fit model
             self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
@@ -243,18 +244,33 @@ class SkillshotLearner(object):
         self.save_training_progress(total_epoch_progress)
         print("model_train done.")
 
-    def models_fit(self, features, targets):
-        # TODO - possibly also take in the get_state dicts
+    def models_fit(self, states, actions, rewards):
         # fits the critic model, then transfers the weights to the actor model
 
-        # shuffle features, targets and train with lower batch size for increased generalisation
-        assert len(features) == len(targets)
-        zipped = zip(features, targets)  # zip up to pair values
-        random.shuffle(zipped)  # shuffle zipped pairs
-        features, targets = zip(*zipped)  # unzip
+        # assertions to ensure inputs are correct length
+        assert len(states) == len(actions) == len(rewards)
 
-        # fit model with batch size arg
-        # self.model.fit(features, targets, batch_size=self.model_param_batch_size, verbose=1)
+        # shuffle features, targets and train with lower batch size for increased generalisation
+        zipped = zip(states, actions, rewards)  # zip up to pair values
+        random.shuffle(zipped)  # shuffle zipped pairs
+        states, actions, rewards = zip(*zipped)  # unzip
+
+        # first fit the critic
+        self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
+
+        # fit the actor
+        # model is incrementally updated here, so a new predicted action has to be made every time
+        for state, reward in zip(states, rewards):
+            # get a new action for the model state
+            current_model_action = self.model_actor.predict(state)
+
+            # get the gradients from the critic
+            backend_func_output = k.gradients(self.model_critic.output, self.model_critic[1])  # (output of critic, action input to critic)
+            gradients = k.function([state, current_model_action], backend_func_output)  # how much the critic/q-value changes depending on the action
+            # optimise using gradients
+            optimise = tf.train.AdamOptimizer().apply_gradients(gradients)
+            placeholder = tf.placeholder(tf.float32, [None, self.dim_action_space])
+            tf.Session.run(optimise, feed_dict={self.model_actor.input: state, placeholder: gradients})
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
@@ -390,3 +406,7 @@ class SkillshotLearner(object):
     def display_training_replay(self, boards):
         # takes list of boards and displays them using pygame to visualise training afterwards
         pass
+
+def main():
+    skillshotLearner = SkillshotLearner()
+    skillshotLearner.model_train(1)
