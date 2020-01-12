@@ -235,8 +235,8 @@ class SkillshotLearner(object):
             assert training_actions.shape[0] == len(cur_epoch_progress.get("player_actions") * len(self.player_ids))
             assert training_actions.shape[1] == self.dim_action_space
 
-            assert training_rewards.shape[0] == len(cur_epoch_progress.get("player_rewards") * len(self.player_ids))
-            assert training_rewards.shape[1] == 1
+            assert training_rewards.shape == len(cur_epoch_progress.get("player_rewards") * len(self.player_ids))
+            assert len(training_rewards.shape) == self.dim_reward_space  # 1d list
 
             assert (len(cur_epoch_progress.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == training_rewards.shape[0]
 
@@ -342,11 +342,6 @@ class SkillshotLearner(object):
         # assert prepared_rewards.shape[0] == len(rewards)
 
         prepared_rewards = rewards.get(player_id)
-
-        # convert to np array for model input
-        prepared_rewards = np.array(prepared_rewards)
-        # assert to ensure the return is the correct shape for the model
-        assert len(prepared_rewards.shape) == self.dim_reward_space  # 1d list
         return prepared_rewards
 
     def calculate_rewards(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2,
