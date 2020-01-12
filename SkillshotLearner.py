@@ -153,7 +153,7 @@ class SkillshotLearner(object):
         pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
         print("Training Progress Saved")
 
-    def model_act(self, player_id, game_state):
+    def model_act(self, game_state, player_id):
         # uses the actor to make a prediction and then acts the single given player
         # returning the action output for future training
         
@@ -187,7 +187,7 @@ class SkillshotLearner(object):
             self.game_environment.game_reset()
             cur_epoch_progress = dict(game_state=[],
                                       player_actions=dict((player, []) for player in self.player_ids),
-                                      playefr_rewards=dict((player, []) for player in self.player_ids))
+                                      player_rewards=dict((player, []) for player in self.player_ids))
 
             # get starting state
             game_state = self.game_environment.get_state()
@@ -197,7 +197,7 @@ class SkillshotLearner(object):
             while self.game_environment.game_live and self.game_environment.ticks <= self.model_param_game_tick_limit:
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    cur_epoch_progress.get("player_actions").get(player_id).append(self.model_act(player_id, game_state))
+                    cur_epoch_progress.get("player_actions").get(player_id).append(self.model_act(game_state, player_id))
                 # tick the game
                 self.game_environment.game_tick()
                 # get and save the resultant game state - and possibly the get_board
@@ -218,7 +218,7 @@ class SkillshotLearner(object):
             for player_id in self.player_ids:
                 training_states + self.prepare_states(cur_epoch_progress.get("game_state")[:-1], player_id)
                 training_actions + self.prepare_actions(cur_epoch_progress.get("player_actions"), player_id)
-                training_rewards + self.prepare_rewards()
+                training_rewards + self.prepare_rewards(cur_epoch_progress.get("player_rewards"), player_id)
 
             # fit model
             self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
@@ -303,8 +303,7 @@ class SkillshotLearner(object):
         assert prepared_actions.shape[1] == self.dim_action_space
         return prepared_actions
 
-    @staticmethod
-    def prepare_rewards(rewards, player_id):
+    def prepare_rewards(self, rewards, player_id):
         # prepares the model targets / reshapes for model
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         return [0]  # returns list
