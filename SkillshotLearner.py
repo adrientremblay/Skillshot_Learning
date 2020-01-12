@@ -11,6 +11,28 @@ from SkillshotGame import SkillshotGame
 
 
 class SkillshotLearner(object):
+    game_state_general_keys = ["game_live",
+                               "ticks",
+                               "game_winner"]
+    game_state_player_keys = ["player_grad",
+                              "player_x_dir",
+                              "player_path_dist_opponent",
+                              "player_dist_opponent",
+                              "player_pos_x",
+                              "player_pos_y",
+                              "player_rotation"]
+    game_state_projectile_keys = ["projectile_cooldown",
+                                  "projectile_grad",
+                                  "projectile_x_dir",
+                                  "projectile_path_dist_opponent",
+                                  "projectile_pos_x",
+                                  "projectile_pos_y",
+                                  "projectile_rotation",
+                                  "projectile_age",
+                                  "projectile_valid",
+                                  "projectile_dist_opponent",
+                                  "projectile_future_collision_opponent"]
+
     def __init__(self):
 
         # environment
@@ -137,8 +159,8 @@ class SkillshotLearner(object):
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
 
         # instead, use state space noise
-        # prepare features for the actor, extract from list with length 1
-        features = self.prepare_features(game_state, player_id)[0]
+        # prepare features for the actor give as list with length 1, extract from list with length 1
+        features = self.prepare_states([game_state], player_id)[0]
         # take prepared features, pass to actor model
         predictions = self.model_actor.predict(features)
 
@@ -182,20 +204,21 @@ class SkillshotLearner(object):
             # game ends, fitting begins
 
             # prepare rewards - initial state has no reward so ignore
-            rewards = self.calculate_reward(cur_epoch_progress.get("game_state")[1:])
+            rewards = self.calculate_rewards(cur_epoch_progress.get("game_state")[1:])
             for reward in rewards:
                 for player_id in self.player_ids:
                     cur_epoch_progress.get("player_rewards").get(player_id).append(reward.get(player_id))
 
             # prepare model features - final state is not used for training, so ignore
-            # TODO
-            player_features, player_targets = [], []
+            # preparation methods split the players out
+            training_states, training_actions, training_rewards = [], [], []
             for player_id in self.player_ids:
-                player_features + self.prepare_features(cur_epoch_progress.get("game_state"), player_id)
-                player_targets + self.prepare_targets(cur_epoch_progress.get("player_rewards").get(player_id), player_id)
+                training_states + self.prepare_states(cur_epoch_progress.get("game_state"), player_id)
+                training_actions + self.prepare_actions()
+                training_rewards + self.prepare_rewards()
 
             # fit model
-            self.models_fit(player_features, player_targets)  # fit can be called a single time
+            self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
 
             # move the features and targets to epoch-persistent progress dict
             total_epoch_progress.get("epoch_ticks").append(self.game_environment.ticks)
@@ -225,19 +248,52 @@ class SkillshotLearner(object):
         # fit model with batch size arg
         # self.model.fit(features, targets, batch_size=self.model_param_batch_size, verbose=1)
 
-    @staticmethod
-    def prepare_features(game_state, player_id):
-        # prepares the model inputs / reshapes for model
-        # for model training against self, the dict will need to be flipped to keep consistent "self" player
-        return [0]  # returns list
+    def prepare_states(self, game_states, player_id):
+        # prepares the game_states for training - takes list of game states and player id
+        # returns a list of trainable shape containing the states for the given player
+        prepared_states = []
+        for game_state in game_states:
+            current_state = []
+            # (general states not given to model)
+
+            # get and normalise the player states
+            current_state.append(game_state.get("player_path_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(game_state.get("player_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(game_state.get("player_pos_x") / self.game_environment.board_size[0])
+            current_state.append(game_state.get("player_pos_y") / self.game_environment.board_size[1])
+            current_state.append((game_state.get("player_rotation") % 2*np.pi) / 2*np.pi)
+
+            # get and normalise the projectile states
+            current_state.append(game_state.get("projectile_cooldown") / self.game_environment.get_player_by_id(player_id).projectile.cooldown_max)
+            current_state.append(game_state.get("projectile_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(game_state.get("projectile_pos_x") / self.game_environment.board_size[0])
+            current_state.append(game_state.get("projectile_pos_y") / self.game_environment.board_size[1])
+            current_state.append((game_state.get("projectile_rotation") % 2*np.pi) / 2*np.pi)
+            current_state.append(game_state.get("projectile_path_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(int(game_state.get("projectile_future_collision_opponent")))
+
+            # append to all state lists
+            prepared_states.append(current_state)
+
+        # assert to ensure the return is the correct shape for the model
+        assert prepared_states[0] == self.dim_state_space
+
+        return prepared_states
 
     @staticmethod
-    def prepare_targets(rewards, player_id):
+    def prepare_actions(actions, player_id):
         # prepares the model targets / reshapes for model
         # for model training against self, the dict will need to be flipped to keep consistent "self" player
         return [0]  # returns list
 
-    def calculate_reward(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2, base_reward_multiplier=0.75):
+    @staticmethod
+    def prepare_rewards(rewards, player_id):
+        # prepares the model targets / reshapes for model
+        # for model training against self, the dict will need to be flipped to keep consistent "self" player
+        return [0]  # returns list
+
+    def calculate_rewards(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2,
+                          base_reward_multiplier=0.75):
         # takes a list of states and calculates the reward or q-value for each state
         # returning a list of dicts with rewards for each player
 
@@ -286,7 +342,7 @@ class SkillshotLearner(object):
                 # also just add the minimum dist for the projectile * 2 on for projectile firing states
                 # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
                 dist_list = game_states_distances[game_state_index]  # get the right pair of distances
-                player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) + min_dist * 2
+                player_reward = (dist_list[opponent_id + 1] - (dist_list[player_id + 1] * reward_multi)) + min_dist * 2
                 state_reward[player_id] = player_reward / self.max_dist_normaliser
             rewards.append(state_reward)
         return rewards

@@ -139,6 +139,7 @@ class SkillshotGame(object):
             player_feature_dict = dict(player_grad=player_grad_dir_dict.get("gradient"),
                                        player_x_dir=player_grad_dir_dict.get("x_dir"),
                                        player_path_dist_opponent=self.get_dist_line_point(player_grad_dir_dict.get("gradient"), player.pos, opponent_player.pos),
+                                       player_dist_opponent=self.get_dist_point_point(player.pos, opponent_player.pos),
                                        player_pos_x=player.pos[0],
                                        player_pos_y=player.pos[1],
                                        player_rotation=player.rotation,
