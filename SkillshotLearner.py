@@ -49,8 +49,9 @@ class SkillshotLearner(object):
         # model
         self.model_actor = None
         self.model_critic = None
-        self.dim_state_space = 5
-        self.dim_action_space = 2
+        self.dim_state_space = 12
+        self.dim_action_space = 2  # 2 continuous action inputs
+        self.dim_reward_space = 1  # 1d list
 
         # model hyper-params
         # self.model_param_mutate_threshold = 0.25  # using state space noise instead of action space noise
@@ -220,6 +221,10 @@ class SkillshotLearner(object):
                 training_actions + self.prepare_actions(cur_epoch_progress.get("player_actions"), player_id)
                 training_rewards + self.prepare_rewards(cur_epoch_progress.get("player_rewards"), player_id)
 
+            # assertions to ensure the training lists are all the right length and shape
+            assert (len(cur_epoch_progress.get("game_state")) - 1) * len(self.player_ids) == len(training_actions) == len(training_rewards)
+            assert len(training_states) == len(training_actions) == len(training_rewards)
+
             # fit model
             self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
 
@@ -320,7 +325,7 @@ class SkillshotLearner(object):
         # convert to np array for model input
         prepared_rewards = np.array(prepared_rewards)
         # assert to ensure the return is the correct shape for the model
-        assert len(prepared_rewards.shape) == 1  # 1d list
+        assert len(prepared_rewards.shape) == self.dim_reward_space  # 1d list
         return prepared_rewards
 
     def calculate_rewards(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2,
