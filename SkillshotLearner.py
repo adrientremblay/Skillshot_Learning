@@ -6,7 +6,7 @@ import keras
 import numpy as np
 import pandas as pd
 from keras import Input, Model
-from keras.layers import Dense, GaussianNoise, Concatenate, concatenate
+from keras.layers import Dense, GaussianNoise, concatenate
 from keras import backend as k
 
 from SkillshotGame import SkillshotGame
@@ -159,7 +159,7 @@ class SkillshotLearner(object):
     def model_act(self, game_state, player_id):
         # uses the actor to make a prediction and then acts the single given player
         # returning the action output for future training
-        
+
         # for action space noise:
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
@@ -188,40 +188,40 @@ class SkillshotLearner(object):
         for epoch in range(epochs):
             # reset the game and epoch data lists TODO add reset to random positions inside SkillshotGame
             self.game_environment.game_reset()
-            cur_epoch_progress = dict(game_state=[],
-                                      player_actions=dict((player, []) for player in self.player_ids),
-                                      player_rewards=dict((player, []) for player in self.player_ids))
+            cur_epoch_prog = dict(game_state=[],
+                                  player_actions=dict((player, []) for player in self.player_ids),
+                                  player_rewards=dict((player, []) for player in self.player_ids))
 
             # get starting state
             game_state = self.game_environment.get_state()
-            cur_epoch_progress.get("game_state").append(game_state)
+            cur_epoch_prog.get("game_state").append(game_state)
 
             # enter training loop
             while self.game_environment.game_live and self.game_environment.ticks <= self.model_param_game_tick_limit:
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    cur_epoch_progress.get("player_actions").get(player_id).append(self.model_act(game_state, player_id))
+                    cur_epoch_prog.get("player_actions").get(player_id).append(self.model_act(game_state, player_id))
                 # tick the game
                 self.game_environment.game_tick()
                 # get and save the resultant game state - and possibly the get_board
                 game_state = self.game_environment.get_state()
-                cur_epoch_progress.get("game_state").append(game_state)
+                cur_epoch_prog.get("game_state").append(game_state)
 
             # game ends, fitting preparation begins
 
             # prepare rewards - initial state has no reward so ignore
-            rewards = self.calculate_rewards(cur_epoch_progress.get("game_state")[1:])
+            rewards = self.calculate_rewards(cur_epoch_prog.get("game_state")[1:])
             for reward in rewards:
                 for player_id in self.player_ids:
-                    cur_epoch_progress.get("player_rewards").get(player_id).append(reward.get(player_id))
+                    cur_epoch_prog.get("player_rewards").get(player_id).append(reward.get(player_id))
 
             # prepare model features - final state is not used for training, so ignore
             # preparation methods split the players out - ignoring the player not passed to the methods
             training_states, training_actions, training_rewards = [], [], []
             for player_id in self.player_ids:
-                training_states + self.prepare_states(cur_epoch_progress.get("game_state")[:-1], player_id)
-                training_actions + self.prepare_actions(cur_epoch_progress.get("player_actions"), player_id)
-                training_rewards + self.prepare_rewards(cur_epoch_progress.get("player_rewards"), player_id)
+                training_states += self.prepare_states(cur_epoch_prog.get("game_state")[:-1], player_id)
+                training_actions += self.prepare_actions(cur_epoch_prog.get("player_actions"), player_id)
+                training_rewards += self.prepare_rewards(cur_epoch_prog.get("player_rewards"), player_id)
 
             # convert to np arrays
             training_states = np.array(training_states)
@@ -229,16 +229,18 @@ class SkillshotLearner(object):
             training_rewards = np.array(training_rewards)
 
             # assertions to ensure the training lists have been split correctly
-            assert training_states.shape[0] == len(cur_epoch_progress.get("game_state")[:-1])
+            assert training_states.shape[0] == len(cur_epoch_prog.get("game_state")[:-1] * len(self.player_ids))
             assert training_states.shape[1] == self.dim_state_space
 
-            assert training_actions.shape[0] == len(cur_epoch_progress.get("player_actions") * len(self.player_ids))
+            actions_len = cur_epoch_prog.get("player_actions").get(1) + cur_epoch_prog.get("player_actions").get(2)
+            assert training_actions.shape[0] == len(actions_len)
             assert training_actions.shape[1] == self.dim_action_space
 
-            assert training_rewards.shape == len(cur_epoch_progress.get("player_rewards") * len(self.player_ids))
+            rewards_len = cur_epoch_prog.get("player_rewards").get(1) + cur_epoch_prog.get("player_rewards").get(2)
+            assert training_rewards.shape[0] == len(rewards_len)
             assert len(training_rewards.shape) == self.dim_reward_space  # 1d list
 
-            assert (len(cur_epoch_progress.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == training_rewards.shape[0]
+            assert (len(cur_epoch_prog.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == training_rewards.shape[0]
 
             # fit model
             self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
@@ -264,10 +266,14 @@ class SkillshotLearner(object):
         # assertions to ensure inputs are correct length
         assert len(states) == len(actions) == len(rewards)
 
-        # shuffle features, targets and train with lower batch size for increased generalisation
-        zipped = zip(states, actions, rewards)  # zip up to pair values
-        random.shuffle(zipped)  # shuffle zipped pairs
-        states, actions, rewards = zip(*zipped)  # unzip
+        # shuffle features, targets, rewards and train with lower batch size for increased generalisation
+        assert states.shape[0] == actions.shape[0] == rewards.shape[0]
+        indices = np.arange(states.shape[0])
+        np.random.shuffle(indices)
+
+        states = states[indices]
+        actions = actions[indices]
+        rewards = rewards[indices]
 
         # first fit the critic
         self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
@@ -279,8 +285,10 @@ class SkillshotLearner(object):
             current_model_action = self.model_actor.predict(state)
 
             # get the gradients from the critic
-            backend_func_output = k.gradients(self.model_critic.output, self.model_critic[1])  # (output of critic, action input to critic)
-            gradients = k.function([state, current_model_action], backend_func_output)  # how much the critic/q-value changes depending on the action
+            backend_func_output = k.gradients(self.model_critic.output,
+                                              self.model_critic[1])  # (output of critic, action input to critic)
+            gradients = k.function([state, current_model_action],
+                                   backend_func_output)  # how much the critic/q-value changes depending on the action
             # optimise using gradients
             optimise = tf.train.AdamOptimizer().apply_gradients(gradients)
             placeholder = tf.placeholder(tf.float32, [None, self.dim_action_space])
@@ -303,14 +311,15 @@ class SkillshotLearner(object):
             current_state.append(player_state.get("player_dist_opponent") / self.max_dist_normaliser)
             current_state.append(player_state.get("player_pos_x") / self.game_environment.board_size[0])
             current_state.append(player_state.get("player_pos_y") / self.game_environment.board_size[1])
-            current_state.append((player_state.get("player_rotation") % 2*np.pi) / 2*np.pi)
+            current_state.append((player_state.get("player_rotation") % 2 * np.pi) / 2 * np.pi)
 
             # get and normalise the projectile states
-            current_state.append(player_state.get("projectile_cooldown") / self.game_environment.get_player_by_id(player_id).projectile.cooldown_max)
+            current_state.append(player_state.get("projectile_cooldown") / self.game_environment.get_player_by_id(
+                player_id).projectile.cooldown_max)
             current_state.append(player_state.get("projectile_dist_opponent") / self.max_dist_normaliser)
             current_state.append(player_state.get("projectile_pos_x") / self.game_environment.board_size[0])
             current_state.append(player_state.get("projectile_pos_y") / self.game_environment.board_size[1])
-            current_state.append((player_state.get("projectile_rotation") % 2*np.pi) / 2*np.pi)
+            current_state.append((player_state.get("projectile_rotation") % 2 * np.pi) / 2 * np.pi)
             current_state.append(player_state.get("projectile_path_dist_opponent") / self.max_dist_normaliser)
             current_state.append(int(player_state.get("projectile_future_collision_opponent")))
 
@@ -323,12 +332,13 @@ class SkillshotLearner(object):
         # returns list of trainable shape containing the actions for the given player
         # other player's actions are ignored
 
-        # prepared_actions = []
+        prepared_actions = []
         # for action in actions:
         #     prepared_actions.append(action.get(player_id))
         # assert prepared_actions.shape[0] == len(actions)
 
-        prepared_actions = actions.get(player_id)
+        for action in actions.get(player_id):
+            prepared_actions.append(action[0])
         return prepared_actions
 
     def prepare_rewards(self, rewards, player_id):
@@ -336,12 +346,13 @@ class SkillshotLearner(object):
         # returns list of trainable shape containing the rewards for the given player
         # other player's rewards are ignored
 
-        # prepared_rewards = []
+        prepared_rewards = []
         # for reward in rewards:
         #     prepared_rewards.append(reward.get(player_id))
         # assert prepared_rewards.shape[0] == len(rewards)
 
-        prepared_rewards = rewards.get(player_id)
+        for reward in rewards.get(player_id):
+            prepared_rewards.append(reward)
         return prepared_rewards
 
     def calculate_rewards(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2,
@@ -412,8 +423,10 @@ class SkillshotLearner(object):
 
 def main():
     skillshotLearner = SkillshotLearner()
+    skillshotLearner.model_param_game_tick_limit = 10
     skillshotLearner.model_define_actor()
     skillshotLearner.model_define_critic()
     skillshotLearner.model_train(1)
+
 
 main()
