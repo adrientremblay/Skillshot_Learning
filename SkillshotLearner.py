@@ -282,10 +282,11 @@ class SkillshotLearner(object):
 
                 # calculate the difference of dists - +1 for indexing on dist_list - bonus for being on target
                 # maximise (distance of enemy projectile to you) - (distance of your projectile to enemy)
+                # also just add the minimum dist for the projectile * 2 on for projectile firing states
                 # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
                 dist_list = game_states_distances[game_state_index]  # get the right pair of distances
-                player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) / self.max_dist_normaliser
-                state_reward[player_id] = player_reward
+                player_reward = (dist_list[opponent_id+1] - (dist_list[player_id+1] * reward_multi)) + min_dist * 2
+                state_reward[player_id] = player_reward / self.max_dist_normaliser
             rewards.append(state_reward)
         return rewards
 
