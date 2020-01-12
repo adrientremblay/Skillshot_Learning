@@ -154,6 +154,9 @@ class SkillshotLearner(object):
         print("Training Progress Saved")
 
     def model_act(self, player_id, game_state):
+        # uses the actor to make a prediction and then acts the single given player
+        # returning the action output for future training
+        
         # for action space noise:
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
@@ -165,9 +168,9 @@ class SkillshotLearner(object):
         predictions = self.model_actor.predict(features)
 
         # perform the predicted action(s)
-        # move_shoot_projectile is attempted every time to simply model
         self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0])
         self.game_environment.get_player_by_id(player_id).move_look_float(predictions[1])
+        # move_shoot_projectile is attempted every time to simplify model
         self.game_environment.get_player_by_id(player_id).move_shoot_projectile()
 
         # also return the actor output
@@ -183,8 +186,8 @@ class SkillshotLearner(object):
             # reset the game and epoch data lists TODO add reset to random positions inside SkillshotGame
             self.game_environment.game_reset()
             cur_epoch_progress = dict(game_state=[],
-                                      actions=dict((player, []) for player in self.player_ids),
-                                      player_rewards=dict((player, []) for player in self.player_ids))
+                                      player_actions=dict((player, []) for player in self.player_ids),
+                                      playefr_rewards=dict((player, []) for player in self.player_ids))
 
             # get starting state
             game_state = self.game_environment.get_state()
@@ -194,7 +197,7 @@ class SkillshotLearner(object):
             while self.game_environment.game_live and self.game_environment.ticks <= self.model_param_game_tick_limit:
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    cur_epoch_progress.get("actions").get(player_id).append(self.model_act(player_id, game_state))
+                    cur_epoch_progress.get("player_actions").get(player_id).append(self.model_act(player_id, game_state))
                 # tick the game
                 self.game_environment.game_tick()
                 # get and save the resultant game state - and possibly the get_board
@@ -210,11 +213,11 @@ class SkillshotLearner(object):
                     cur_epoch_progress.get("player_rewards").get(player_id).append(reward.get(player_id))
 
             # prepare model features - final state is not used for training, so ignore
-            # preparation methods split the players out
+            # preparation methods split the players out - ignoring the player not passed to the methods
             training_states, training_actions, training_rewards = [], [], []
             for player_id in self.player_ids:
-                training_states + self.prepare_states(cur_epoch_progress.get("game_state"), player_id)
-                training_actions + self.prepare_actions()
+                training_states + self.prepare_states(cur_epoch_progress.get("game_state")[:-1], player_id)
+                training_actions + self.prepare_actions(cur_epoch_progress.get("player_actions"), player_id)
                 training_rewards + self.prepare_rewards()
 
             # fit model
@@ -251,6 +254,8 @@ class SkillshotLearner(object):
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
         # returns a list of trainable shape containing the states for the given player
+        # other player's states are ignored
+
         prepared_states = []
         for game_state in game_states:
             current_state = []
@@ -282,11 +287,21 @@ class SkillshotLearner(object):
         assert prepared_states.shape[1] == self.dim_state_space
         return prepared_states
 
-    @staticmethod
-    def prepare_actions(actions, player_id):
-        # prepares the model targets / reshapes for model
-        # for model training against self, the dict will need to be flipped to keep consistent "self" player
-        return [0]  # returns list
+    def prepare_actions(self, actions, player_id):
+        # prepares the actions taken by the players for model training
+        # returns list of trainable shape containing the actions for the given player
+        # other player's actions are ignored
+
+        prepared_actions = []
+        for action in actions:
+            prepared_actions.append(action.get(player_id))
+
+        # convert to np array for model input
+        prepared_actions = np.array(prepared_actions)
+        # assert to ensure the return is the correct shape for the model
+        assert prepared_actions.shape[0] == len(actions)
+        assert prepared_actions.shape[1] == self.dim_action_space
+        return prepared_actions
 
     @staticmethod
     def prepare_rewards(rewards, player_id):
