@@ -292,21 +292,36 @@ class SkillshotLearner(object):
         # returns list of trainable shape containing the actions for the given player
         # other player's actions are ignored
 
-        prepared_actions = []
-        for action in actions:
-            prepared_actions.append(action.get(player_id))
+        # prepared_actions = []
+        # for action in actions:
+        #     prepared_actions.append(action.get(player_id))
+        # assert prepared_actions.shape[0] == len(actions)
+
+        prepared_actions = actions.get(player_id)
 
         # convert to np array for model input
         prepared_actions = np.array(prepared_actions)
         # assert to ensure the return is the correct shape for the model
-        assert prepared_actions.shape[0] == len(actions)
         assert prepared_actions.shape[1] == self.dim_action_space
         return prepared_actions
 
     def prepare_rewards(self, rewards, player_id):
-        # prepares the model targets / reshapes for model
-        # for model training against self, the dict will need to be flipped to keep consistent "self" player
-        return [0]  # returns list
+        # prepares the rewards for actions for model training
+        # returns list of trainable shape containing the rewards for the given player
+        # other player's rewards are ignored
+
+        # prepared_rewards = []
+        # for reward in rewards:
+        #     prepared_rewards.append(reward.get(player_id))
+        # assert prepared_rewards.shape[0] == len(rewards)
+
+        prepared_rewards = rewards.get(player_id)
+
+        # convert to np array for model input
+        prepared_rewards = np.array(prepared_rewards)
+        # assert to ensure the return is the correct shape for the model
+        assert len(prepared_rewards.shape) == 1  # 1d list
+        return prepared_rewards
 
     def calculate_rewards(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2,
                           base_reward_multiplier=0.75):
