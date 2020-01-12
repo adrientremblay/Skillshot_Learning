@@ -6,7 +6,7 @@ import keras
 import numpy as np
 import pandas as pd
 from keras import Input, Model
-from keras.layers import Dense, GaussianNoise, Concatenate
+from keras.layers import Dense, GaussianNoise, Concatenate, concatenate
 from keras import backend as k
 
 from SkillshotGame import SkillshotGame
@@ -64,7 +64,7 @@ class SkillshotLearner(object):
         # define an actor model, which chooses actions based on the game's state
 
         # inputs
-        state_input = Input(self.dim_state_space)
+        state_input = Input((self.dim_state_space,))
 
         layer_model = Dense(256, activation="relu")(state_input)
         layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training TODO needed?
@@ -76,7 +76,7 @@ class SkillshotLearner(object):
         layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="zeros")(layer_model)
 
         # compile model
-        actor = Model(state_input, layer_output)
+        actor = Model(state_input, layer_output, name="actor")
         actor.compile(optimizer="adam", loss="mse")  # using default learning rate
         actor.summary()
 
@@ -86,11 +86,11 @@ class SkillshotLearner(object):
         # define a critic model, which predicts the resultant q-value from the actor's action and the game state
 
         # inputs
-        state_input = Input(self.dim_state_space)
-        actor_input = Input(self.dim_action_space)  # same shape as the actor's output layer
+        state_input = Input((self.dim_state_space,))
+        actor_input = Input((self.dim_action_space,))  # same shape as the actor's output layer
 
         layer_model = Dense(256, activation="relu")(state_input)
-        layer_model = Concatenate([layer_model, actor_input])  # concat the actions with the state
+        layer_model = concatenate([layer_model, actor_input])  # concat the actions with the state
         layer_model = Dense(128, activation="relu")(layer_model)
 
         # outputs
@@ -98,7 +98,7 @@ class SkillshotLearner(object):
         layer_output = Dense(1, activation="linear", kernel_initializer="zeros")(layer_model)
 
         # compile model
-        critic = Model([state_input, actor_input], layer_output)
+        critic = Model([state_input, actor_input], layer_output, name="critic")
         critic.compile(optimizer="adam", loss="mse")  # using default learning rate
         critic.summary()
 
@@ -168,11 +168,11 @@ class SkillshotLearner(object):
         # prepare features for the actor give as list with length 1, extract from list with length 1
         features = self.prepare_states([game_state], player_id)[0]
         # take prepared features, pass to actor model
-        predictions = self.model_actor.predict(features)
+        predictions = self.model_actor.predict(np.expand_dims(features, 0))
 
         # perform the predicted action(s)
-        self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0])
-        self.game_environment.get_player_by_id(player_id).move_look_float(predictions[1])
+        self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0][0])
+        self.game_environment.get_player_by_id(player_id).move_look_float(predictions[0][1])
         # move_shoot_projectile is attempted every time to simplify model
         self.game_environment.get_player_by_id(player_id).move_shoot_projectile()
 
@@ -223,8 +223,22 @@ class SkillshotLearner(object):
                 training_actions + self.prepare_actions(cur_epoch_progress.get("player_actions"), player_id)
                 training_rewards + self.prepare_rewards(cur_epoch_progress.get("player_rewards"), player_id)
 
+            # convert to np arrays
+            training_states = np.array(training_states)
+            training_actions = np.array(training_actions)
+            training_rewards = np.array(training_rewards)
+
             # assertions to ensure the training lists have been split correctly
-            assert (len(cur_epoch_progress.get("game_state")) - 1) * len(self.player_ids) == len(training_actions) == len(training_rewards)
+            assert training_states.shape[0] == len(cur_epoch_progress.get("game_state")[:-1])
+            assert training_states.shape[1] == self.dim_state_space
+
+            assert training_actions.shape[0] == len(cur_epoch_progress.get("player_actions") * len(self.player_ids))
+            assert training_actions.shape[1] == self.dim_action_space
+
+            assert training_rewards.shape[0] == len(cur_epoch_progress.get("player_rewards") * len(self.player_ids))
+            assert training_rewards.shape[1] == 1
+
+            assert (len(cur_epoch_progress.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == training_rewards.shape[0]
 
             # fit model
             self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
@@ -282,30 +296,26 @@ class SkillshotLearner(object):
             current_state = []
             # (general states not given to model)
 
+            # enter player's states
+            player_state = game_state.get(player_id)
             # get and normalise the player states
-            current_state.append(game_state.get("player_path_dist_opponent") / self.max_dist_normaliser)
-            current_state.append(game_state.get("player_dist_opponent") / self.max_dist_normaliser)
-            current_state.append(game_state.get("player_pos_x") / self.game_environment.board_size[0])
-            current_state.append(game_state.get("player_pos_y") / self.game_environment.board_size[1])
-            current_state.append((game_state.get("player_rotation") % 2*np.pi) / 2*np.pi)
+            current_state.append(player_state.get("player_path_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(player_state.get("player_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(player_state.get("player_pos_x") / self.game_environment.board_size[0])
+            current_state.append(player_state.get("player_pos_y") / self.game_environment.board_size[1])
+            current_state.append((player_state.get("player_rotation") % 2*np.pi) / 2*np.pi)
 
             # get and normalise the projectile states
-            current_state.append(game_state.get("projectile_cooldown") / self.game_environment.get_player_by_id(player_id).projectile.cooldown_max)
-            current_state.append(game_state.get("projectile_dist_opponent") / self.max_dist_normaliser)
-            current_state.append(game_state.get("projectile_pos_x") / self.game_environment.board_size[0])
-            current_state.append(game_state.get("projectile_pos_y") / self.game_environment.board_size[1])
-            current_state.append((game_state.get("projectile_rotation") % 2*np.pi) / 2*np.pi)
-            current_state.append(game_state.get("projectile_path_dist_opponent") / self.max_dist_normaliser)
-            current_state.append(int(game_state.get("projectile_future_collision_opponent")))
+            current_state.append(player_state.get("projectile_cooldown") / self.game_environment.get_player_by_id(player_id).projectile.cooldown_max)
+            current_state.append(player_state.get("projectile_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(player_state.get("projectile_pos_x") / self.game_environment.board_size[0])
+            current_state.append(player_state.get("projectile_pos_y") / self.game_environment.board_size[1])
+            current_state.append((player_state.get("projectile_rotation") % 2*np.pi) / 2*np.pi)
+            current_state.append(player_state.get("projectile_path_dist_opponent") / self.max_dist_normaliser)
+            current_state.append(int(player_state.get("projectile_future_collision_opponent")))
 
             # append to all state lists
             prepared_states.append(current_state)
-
-        # convert to np array for model input
-        prepared_states = np.array(prepared_states)
-        # assert to ensure the return is the correct shape for the model
-        assert prepared_states.shape[0] == len(game_states)
-        assert prepared_states.shape[1] == self.dim_state_space
         return prepared_states
 
     def prepare_actions(self, actions, player_id):
@@ -319,11 +329,6 @@ class SkillshotLearner(object):
         # assert prepared_actions.shape[0] == len(actions)
 
         prepared_actions = actions.get(player_id)
-
-        # convert to np array for model input
-        prepared_actions = np.array(prepared_actions)
-        # assert to ensure the return is the correct shape for the model
-        assert prepared_actions.shape[1] == self.dim_action_space
         return prepared_actions
 
     def prepare_rewards(self, rewards, player_id):
@@ -352,7 +357,7 @@ class SkillshotLearner(object):
         # calculate the projectile distances for each player for each game_state beforehand
         game_states_distances = []
         for game_state in game_states:
-            dist_list = [game_state.get(player_id).get("Projectile_dist_opponent") for player_id in self.player_ids]
+            dist_list = [game_state.get(player_id).get("projectile_dist_opponent") for player_id in self.player_ids]
             game_states_distances.append(dist_list)
 
         rewards = []
@@ -394,7 +399,9 @@ class SkillshotLearner(object):
                 # also just add the minimum dist for the projectile * 2 on for projectile firing states
                 # also apply reward multiplier to own projectile's distance to enemy, also divide by max_dist
                 dist_list = game_states_distances[game_state_index]  # get the right pair of distances
-                player_reward = (dist_list[opponent_id + 1] - (dist_list[player_id + 1] * reward_multi)) + min_dist * 2
+                opponent_index = (opponent_id + 1) % len(self.player_ids)
+                player_index = (player_id + 1) % len(self.player_ids)
+                player_reward = (dist_list[opponent_index] - (dist_list[player_index] * reward_multi)) + min_dist * 2
                 state_reward[player_id] = player_reward / self.max_dist_normaliser
             rewards.append(state_reward)
         return rewards
@@ -407,6 +414,11 @@ class SkillshotLearner(object):
         # takes list of boards and displays them using pygame to visualise training afterwards
         pass
 
+
 def main():
     skillshotLearner = SkillshotLearner()
+    skillshotLearner.model_define_actor()
+    skillshotLearner.model_define_critic()
     skillshotLearner.model_train(1)
+
+main()
