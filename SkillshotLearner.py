@@ -275,9 +275,11 @@ class SkillshotLearner(object):
             # append to all state lists
             prepared_states.append(current_state)
 
+        # convert to np array for model input
+        prepared_states = np.array(prepared_states)
         # assert to ensure the return is the correct shape for the model
-        assert prepared_states[0] == self.dim_state_space
-
+        assert prepared_states.shape[0] == len(game_states)
+        assert prepared_states.shape[1] == self.dim_state_space
         return prepared_states
 
     @staticmethod
