@@ -282,11 +282,11 @@ class SkillshotLearner(object):
         # model is incrementally updated here, so a new predicted action has to be made every time
         for state, reward in zip(states, rewards):
             # get a new action for the model state
-            current_model_action = self.model_actor.predict(state)
+            current_model_action = self.model_actor.predict(np.expand_dims(state, axis=0))
 
             # get the gradients from the critic
             backend_func_output = k.gradients(self.model_critic.output,
-                                              self.model_critic[1])  # (output of critic, action input to critic)
+                                              self.model_critic.input[1])  # (output of critic, action input to critic)
             gradients = k.function([state, current_model_action],
                                    backend_func_output)  # how much the critic/q-value changes depending on the action
             # optimise using gradients
