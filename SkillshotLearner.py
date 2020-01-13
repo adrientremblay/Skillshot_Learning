@@ -256,9 +256,9 @@ class SkillshotLearner(object):
 
         # after all epochs are completed, print overall performance
         print("Training Completed")
-        # save model and finish
-        self.save_actor_critic_models(epochs)
-        self.save_training_progress(total_epoch_progress)
+        # save model and finish TODO move to main
+        # self.save_actor_critic_models(epochs)
+        # self.save_training_progress(total_epoch_progress)
         print("model_train done.")
 
     def models_fit(self, states, actions, rewards):
@@ -280,25 +280,20 @@ class SkillshotLearner(object):
         self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
 
         # fit the actor
-
-        critic_action_grads = k.function([self.model_critic.input[0], self.model_critic.input[1]],
-                                         k.gradients(self.model_critic.output, [self.model_critic.input[1]]))
-        with tf.GradientTape() as tape:
-            tape.watch(self.model_actor.trainable_weights)
-            tape.watch(self.model_actor.output)
-
-        action_gdts = k.placeholder(shape=(None, self.dim_action_space))
-        params_grad = tape.gradient(self.model_actor.output, self.model_actor.trainable_weights, -action_gdts)
-        grads = zip(params_grad, self.model_actor.trainable_weights)
-        # actor_optimiser = k.function([self.model_actor.input, action_gdts], [tf.keras.optimizers.Adam().apply_gradients(grads)])
+        # pre gradients
+        grad_from_critic = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
+        # print(k.eval(grad_from_critic[0]))
+        print(grad_from_critic)
 
         # model is incrementally updated here, so a new predicted action has to be made every time
         for state, reward in zip(states, rewards):
-            action = self.model_actor.predict(np.expand_dims(state, axis=0))
-            grads = critic_action_grads(state, action)
-            # Train actor
-            grads = np.array(grads).reshape((-1, self.dim_action_space))
-            k.function([states, action], [tf.keras.optimizers.Adam().apply_gradients(grads)])
+            current_model_action = self.model_actor.predict(np.expand_dims(state, axis=0))
+            print(current_model_action)
+            # tf.keras.optimizers.Adam().apply_gradients(zip(grad_from_critic, k.constant(current_model_action)))
+            # keras.optimizers.Adam().apply_gradients(zip(grad_from_critic, k.constant(current_model_action)))
+            # self.model_actor.apply_gradients(zip(grad_from_critic, k.constant(current_model_action)))
+            # custom optimisation routine
+            # keras.optimizers.Adam().get_gradients(zip(grad_from_critic, k.constant(current_model_action)))
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
@@ -432,7 +427,7 @@ def main():
     skillshotLearner.model_param_game_tick_limit = 10
     skillshotLearner.model_define_actor()
     skillshotLearner.model_define_critic()
-    skillshotLearner.model_train(1)
+    skillshotLearner.model_train(5)
 
 
 main()
