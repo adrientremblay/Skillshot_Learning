@@ -73,7 +73,7 @@ class SkillshotLearner(object):
 
         # outputs
         # tanh activation is from -1 to 1, which is the correct range for the moves
-        layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="zeros")(layer_model)
+        layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="RandomNormal")(layer_model)
 
         # compile model
         actor = Model(state_input, layer_output, name="actor")
@@ -95,7 +95,7 @@ class SkillshotLearner(object):
 
         # outputs
         # only the q-value (shape 1), and linear activation to be able to reach all q-values
-        layer_output = Dense(1, activation="linear", kernel_initializer="zeros")(layer_model)
+        layer_output = Dense(1, activation="linear", kernel_initializer="RandomNormal")(layer_model)
 
         # compile model
         critic = Model([state_input, actor_input], layer_output, name="critic")
@@ -240,7 +240,8 @@ class SkillshotLearner(object):
             assert training_rewards.shape[0] == len(rewards_len)
             assert len(training_rewards.shape) == self.dim_reward_space  # 1d list
 
-            assert (len(cur_epoch_prog.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == training_rewards.shape[0]
+            assert (len(cur_epoch_prog.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == \
+                   training_rewards.shape[0]
 
             # fit model
             self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
@@ -284,15 +285,19 @@ class SkillshotLearner(object):
             # get a new action for the model state
             current_model_action = self.model_actor.predict(np.expand_dims(state, axis=0))
 
-            # get the gradients from the critic
-            backend_func_output = k.gradients(self.model_critic.output,
-                                              self.model_critic.input[1])  # (output of critic, action input to critic)
-            gradients = k.function([state, current_model_action],
-                                   backend_func_output)  # how much the critic/q-value changes depending on the action
-            # optimise using gradients
-            optimise = tf.train.AdamOptimizer().apply_gradients(gradients)
-            placeholder = tf.placeholder(tf.float32, [None, self.dim_action_space])
-            tf.Session.run(optimise, feed_dict={self.model_actor.input: state, placeholder: gradients})
+            # gradients = k.gradients(self.model_critic.output, self.model_critic.input[1])
+            # placeholder = k.placeholder([self.dim_action_space])
+            print('yeet')
+            with tf.GradientTape() as tape:
+                tape.watch(self.model_actor.output)
+                tape.watch(self.model_actor.trainable_weights)
+            action_gdts = k.placeholder(shape=(None, self.dim_action_space))
+            params_grad = tape.gradient(self.model_actor.output, self.model_actor.trainable_weights, -action_gdts)
+            print(params_grad)
+            grads = zip(params_grad, self.model_actor.trainable_weights)
+            optimise_func = k.function([self.model_actor.input, action_gdts], [tf.keras.optimizers.Adam().apply_gradients(grads)])
+
+            optimise_func([states, grads])
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
