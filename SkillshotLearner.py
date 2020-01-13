@@ -280,24 +280,25 @@ class SkillshotLearner(object):
         self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
 
         # fit the actor
+
+        critic_action_grads = k.function([self.model_critic.input[0], self.model_critic.input[1]],
+                                         k.gradients(self.model_critic.output, [self.model_critic.input[1]]))
+        with tf.GradientTape() as tape:
+            tape.watch(self.model_actor.trainable_weights)
+            tape.watch(self.model_actor.output)
+
+        action_gdts = k.placeholder(shape=(None, self.dim_action_space))
+        params_grad = tape.gradient(self.model_actor.output, self.model_actor.trainable_weights, -action_gdts)
+        grads = zip(params_grad, self.model_actor.trainable_weights)
+        # actor_optimiser = k.function([self.model_actor.input, action_gdts], [tf.keras.optimizers.Adam().apply_gradients(grads)])
+
         # model is incrementally updated here, so a new predicted action has to be made every time
         for state, reward in zip(states, rewards):
-            # get a new action for the model state
-            current_model_action = self.model_actor.predict(np.expand_dims(state, axis=0))
-
-            # gradients = k.gradients(self.model_critic.output, self.model_critic.input[1])
-            # placeholder = k.placeholder([self.dim_action_space])
-            print('yeet')
-            with tf.GradientTape() as tape:
-                tape.watch(self.model_actor.output)
-                tape.watch(self.model_actor.trainable_weights)
-            action_gdts = k.placeholder(shape=(None, self.dim_action_space))
-            params_grad = tape.gradient(self.model_actor.output, self.model_actor.trainable_weights, -action_gdts)
-            print(params_grad)
-            grads = zip(params_grad, self.model_actor.trainable_weights)
-            optimise_func = k.function([self.model_actor.input, action_gdts], [tf.keras.optimizers.Adam().apply_gradients(grads)])
-
-            optimise_func([states, grads])
+            action = self.model_actor.predict(np.expand_dims(state, axis=0))
+            grads = critic_action_grads(state, action)
+            # Train actor
+            grads = np.array(grads).reshape((-1, self.dim_action_space))
+            k.function([states, action], [tf.keras.optimizers.Adam().apply_gradients(grads)])
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
