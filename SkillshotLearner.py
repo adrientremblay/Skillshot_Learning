@@ -13,6 +13,7 @@ from SkillshotGame import SkillshotGame
 
 
 class SkillshotLearner(object):
+    model_actor: Model
     game_state_general_keys = ["game_live",
                                "ticks",
                                "game_winner"]
@@ -64,7 +65,7 @@ class SkillshotLearner(object):
         # define an actor model, which chooses actions based on the game's state
 
         # inputs
-        state_input = Input((self.dim_state_space,))
+        state_input = Input((self.dim_state_space,), name="state_input")
 
         layer_model = Dense(256, activation="relu")(state_input)
         layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training TODO needed?
@@ -86,8 +87,8 @@ class SkillshotLearner(object):
         # define a critic model, which predicts the resultant q-value from the actor's action and the game state
 
         # inputs
-        state_input = Input((self.dim_state_space,))
-        actor_input = Input((self.dim_action_space,))  # same shape as the actor's output layer
+        state_input = Input((self.dim_state_space,), name="state_input")
+        actor_input = Input((self.dim_action_space,), name="action_input")  # same shape as the actor's output layer
 
         layer_model = Dense(256, activation="relu")(state_input)
         layer_model = concatenate([layer_model, actor_input])  # concat the actions with the state
@@ -280,20 +281,25 @@ class SkillshotLearner(object):
         self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
 
         # fit the actor
-        # pre gradients
-        grad_from_critic = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
-        # print(k.eval(grad_from_critic[0]))
-        print(grad_from_critic)
 
-        # model is incrementally updated here, so a new predicted action has to be made every time
-        for state, reward in zip(states, rewards):
-            current_model_action = self.model_actor.predict(np.expand_dims(state, axis=0))
-            print(current_model_action)
-            # tf.keras.optimizers.Adam().apply_gradients(zip(grad_from_critic, k.constant(current_model_action)))
-            # keras.optimizers.Adam().apply_gradients(zip(grad_from_critic, k.constant(current_model_action)))
-            # self.model_actor.apply_gradients(zip(grad_from_critic, k.constant(current_model_action)))
-            # custom optimisation routine
-            # keras.optimizers.Adam().get_gradients(zip(grad_from_critic, k.constant(current_model_action)))
+        # get the effect of action on reward / gradient / dQ/dA
+        grad_from_critic = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
+        print(grad_from_critic, "critic")
+
+        # create tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed
+        optimiser = tf.keras.optimizers.Adam()
+
+        print(self.model_actor.trainable_weights[-1])
+        print(grad_from_critic, self.model_actor.trainable_weights[-1])
+
+        # place the dQ/dA into the actor model
+        optimiser.apply_gradients(zip(grad_from_critic, self.model_actor.trainable_weights[-1]))
+
+        # for state, action in zip(states, actions):
+        #     # action = self.model_actor.predict(state)
+        #     # reward = self.model_critic([state, action])
+        #     grad = get_grad(self.model_critic, [np.expand_dims(state[0], axis=1), action])
+        #     optimiser.apply_gradients(zip(grad_from_critic, self.model_actor.get_weights))
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
