@@ -297,21 +297,38 @@ class SkillshotLearner(object):
         # optimiser.apply_gradients(zip(grad_from_critic, [self.model_actor.output]))
 
         for state, _ in zip(states, actions):
+            state = np.expand_dims(state, 0)  # bodge, move into for loop
+
+            # get action for current model state
+            action = self.model_actor.predict(state)
+
             # get gradients of reward with respect to action in critic
             critic_action_grads = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
             print(critic_action_grads, "critic action grads")
+            # place into k func so it can be called
+            critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]], [critic_action_grads])
+            print(critic_action_grads, "critic action grads func")
 
-            # get gradients that effect the actor's output
-            actor_grads = k.gradients(self.model_actor.outputs, self.model_actor.trainable_weights)
-            print(actor_grads, "actor grads")
+            # get the actual critc action grads for current call
+            actual_critic_action_grads = critic_action_grads([state, action])
+            print(actual_critic_action_grads, "actual critic action grads")
 
-            # prepare optimisation func with placeholders
+            # prepare placeholder - this will be replaced when the optimisation func is called with inputs
             phold_grads = k.placeholder(shape=(None, self.dim_action_space))
 
-            func = k.function([self.model_actor.input, phold_grads], [optimiser.apply_gradients(zip(actor_grads, self.model_actor.trainable_weights))])
+            # get gradient and variable pairs in the actor that are to be trained
+            actor_grads = k.gradients(self.model_actor.outputs, self.model_actor.trainable_weights)
+            print(actor_grads, "actor grads")
+            grads_and_vars_to_train = zip(actor_grads, self.model_actor.trainable_weights)
 
-            grads = zip(critic_action_grads, self.model_actor.trainable_weights)
-            func(feed_dict={phold_grads: critic_action_grads, self.model_actor.input: state})
+            print(tf.version.VERSION)
+
+            # prepare optimisation func
+            func = k.function([self.model_actor.inputs[0], phold_grads], [optimiser.apply_gradients(grads_and_vars_to_train)])
+
+
+            print("HERE------------------------")
+
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
