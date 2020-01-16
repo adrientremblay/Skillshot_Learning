@@ -1,19 +1,20 @@
-import random
 import os
 
-import tensorflow as tf
-import keras
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+import keras
+from keras import backend as k
 from keras import Input, Model
 from keras.layers import Dense, GaussianNoise, concatenate
-from keras import backend as k
+
 
 from SkillshotGame import SkillshotGame
 
 
 class SkillshotLearner(object):
     model_actor: Model
+    model_critic: Model
     game_state_general_keys = ["game_live",
                                "ticks",
                                "game_winner"]
@@ -303,7 +304,7 @@ class SkillshotLearner(object):
             action = self.model_actor.predict(state)
 
             # get gradients of reward with respect to action in critic
-            critic_action_grads = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
+            critic_action_grads = k.gradients(self.model_critic.output, self.model_critic.inputs[1])
             print(critic_action_grads, "critic action grads")
             # place into k func so it can be called
             critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]], [critic_action_grads])
@@ -317,18 +318,15 @@ class SkillshotLearner(object):
             phold_grads = k.placeholder(shape=(None, self.dim_action_space))
 
             # get gradient and variable pairs in the actor that are to be trained
-            actor_grads = k.gradients(self.model_actor.outputs, self.model_actor.trainable_weights)
+            # gradient of actor's actions at every weight
+            actor_grads = k.gradients(self.model_actor.output, self.model_actor.trainable_weights)
             print(actor_grads, "actor grads")
             grads_and_vars_to_train = zip(actor_grads, self.model_actor.trainable_weights)
 
-            print(tf.version.VERSION)
-
             # prepare optimisation func
-            func = k.function([self.model_actor.inputs[0], phold_grads], [optimiser.apply_gradients(grads_and_vars_to_train)])
-
+            func = k.function([self.model_actor.input, phold_grads], [optimiser.apply_gradients(grads_and_vars_to_train)])
 
             print("HERE------------------------")
-
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
