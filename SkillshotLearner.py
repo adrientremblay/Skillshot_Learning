@@ -316,6 +316,7 @@ class SkillshotLearner(object):
 
             # prepare placeholder - this will be replaced when the optimisation func is called with inputs
             phold_grads = k.placeholder(shape=(None, self.dim_action_space))
+            print(phold_grads, "phold_grads")
 
             # get gradient and variable pairs in the actor that are to be trained
             # gradient of actor's actions at every weight
@@ -324,9 +325,13 @@ class SkillshotLearner(object):
             grads_and_vars_to_train = zip(actor_grads, self.model_actor.trainable_weights)
 
             # prepare optimisation func
+            func = k.function([self.model_actor.input, phold_grads], [optimiser.weights])
             func = k.function([self.model_actor.input, phold_grads], [optimiser.apply_gradients(grads_and_vars_to_train)])
+            print("YO________________________")
 
-            print("HERE------------------------")
+            # call optimisation func
+            func([self.model_actor.input, actual_critic_action_grads])
+            print("HERE_______________")
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
