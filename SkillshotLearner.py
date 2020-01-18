@@ -285,52 +285,58 @@ class SkillshotLearner(object):
 
         # get the effect of action on reward / gradient / dQ/dA
         grad_from_critic = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
-        # print(grad_from_critic, "critic")
+
+        # get gradients of reward with respect to action in critic
+        critic_action_grads = k.gradients(self.model_critic.output, self.model_critic.inputs[1])
+        # place into k func so it can be called
+        critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]],
+                                         [critic_action_grads])
+
+        # get gradient and variable pairs in the actor that are to be trained
+        # gradient of actor's actions at every weight
+        actor_grads = k.gradients(self.model_actor.output,
+                                  self.model_actor.trainable_weights)  # grad_ys needs to be phold_grads
+        actor_grads = k.function([self.model_actor.inputs], [actor_grads])
 
         # create tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed
         optimiser = tf.keras.optimizers.Adam()
-        #
-        # print(self.model_actor.output)
-        # print(grad_from_critic)
-        # print(tf.executing_eagerly())
-        #
-        # # place the dQ/dA into the actor model
-        # optimiser.apply_gradients(zip(grad_from_critic, [self.model_actor.output]))
 
-        for state, _ in zip(states, actions):
+        for state, _ in zip(states, actions):  # can be done in batches
             state = np.expand_dims(state, 0)  # bodge, move into for loop
 
             # get action for current model state
             action = self.model_actor.predict(state)
 
-            # get gradients of reward with respect to action in critic
-            critic_action_grads = k.gradients(self.model_critic.output, self.model_critic.inputs[1])
-            print(critic_action_grads, "critic action grads")
-            # place into k func so it can be called
-            critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]], [critic_action_grads])
-            print(critic_action_grads, "critic action grads func")
-
             # get the actual critc action grads for current call
             actual_critic_action_grads = critic_action_grads([state, action])
-            print(actual_critic_action_grads, "actual critic action grads")
+            print(actual_critic_action_grads[0][0][0], "actual")
 
-            # prepare placeholder - this will be replaced when the optimisation func is called with inputs
-            phold_grads = k.placeholder(shape=(None, self.dim_action_space))
-            print(phold_grads, "phold_grads")
+            # get the actual actor grads for the current call
+            actual_actor_grads = actor_grads([state])
 
-            # get gradient and variable pairs in the actor that are to be trained
-            # gradient of actor's actions at every weight
-            actor_grads = k.gradients(self.model_actor.output, self.model_actor.trainable_weights)
-            print(actor_grads, "actor grads")
-            grads_and_vars_to_train = zip(actor_grads, self.model_actor.trainable_weights)
+            # the follwing is to replace the below line from tf1.
+            # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
 
-            # prepare optimisation func
-            func = k.function([self.model_actor.input, phold_grads], [optimiser.weights])
-            func = k.function([self.model_actor.input, phold_grads], [optimiser.apply_gradients(grads_and_vars_to_train)])
-            print("YO________________________")
+            # set up the tape
+            with tf.GradientTape() as tape:
+                out = self.model_actor(k.variable(state))  # not predict, needs to return tensor
 
-            # call optimisation func
-            func([self.model_actor.input, actual_critic_action_grads])
+            yeet = tape.gradient(out, self.model_actor.trainable_weights, output_gradients=-actual_critic_action_grads[0][0][0])
+            # yeet = tape.gradient(out, self.model_actor.trainable_weights)  # tape is cleared after .gradient call
+            print(yeet, "grads")
+
+            # grads_and_vars_to_train = zip(actor_grads, self.model_actor.trainable_weights)
+            # instead of using grad_ys, multiply the grad_ys in
+            grads_and_vars_to_train = zip(yeet, self.model_actor.trainable_weights)
+            # grads_and_vars_to_train = zip(actual_critic_action_grads[0], self.model_actor.trainable_weights)
+
+            print("DONE-----------")
+            # func = k.function([self.model_actor.inputs], [optimiser.apply_gradients(grads_and_vars_to_train)])
+
+            # perform the gradient application
+            optimiser.apply_gradients(grads_and_vars_to_train)  # in eager mode simply call to update
+            # func([state, critic_action_grads])
+
             print("HERE_______________")
 
     def prepare_states(self, game_states, player_id):
