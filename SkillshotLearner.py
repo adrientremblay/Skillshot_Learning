@@ -69,17 +69,20 @@ class SkillshotLearner(object):
         state_input = Input((self.dim_state_space,), name="state_input")
 
         layer_model = Dense(256, activation="relu")(state_input)
-        layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training TODO needed?
+        # layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training
         layer_model = Dense(128, activation="relu")(layer_model)
-        layer_model = GaussianNoise(1.0)(layer_model)
+        # layer_model = GaussianNoise(1.0)(layer_model)
 
         # outputs
         # tanh activation is from -1 to 1, which is the correct range for the moves
-        layer_output = Dense(self.dim_action_space, activation="tanh", kernel_initializer="RandomNormal")(layer_model)
+        layer_output = Dense(self.dim_action_space,
+                             activation="tanh",
+                             kernel_initializer="RandomNormal",
+                             name="action_output")(layer_model)
 
         # compile model
-        actor = Model(state_input, layer_output, name="actor")
-        actor.compile(optimizer="adam", loss="mse")  # using default learning rate
+        actor = Model(state_input, layer_output, name="actor",)
+        # actor.compile(optimizer="adam", loss="mse")  # using default learning rate
         actor.summary()
 
         self.model_actor = actor
@@ -97,7 +100,10 @@ class SkillshotLearner(object):
 
         # outputs
         # only the q-value (shape 1), and linear activation to be able to reach all q-values
-        layer_output = Dense(1, activation="linear", kernel_initializer="RandomNormal")(layer_model)
+        layer_output = Dense(1,
+                             activation="linear",
+                             kernel_initializer="RandomNormal",
+                             name="reward_output")(layer_model)
 
         # compile model
         critic = Model([state_input, actor_input], layer_output, name="critic")
