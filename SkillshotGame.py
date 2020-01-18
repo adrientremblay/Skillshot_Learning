@@ -7,12 +7,18 @@ from Player import Player
 
 class SkillshotGame(object):
 
-    def __init__(self):
+    def __init__(self, random_positions=False):
         self.board_size = (250, 250)
         self.board = np.zeros(self.board_size, dtype=int)
 
-        self.player1 = Player([50, 50], self.board_size, 1)
-        self.player2 = Player([200, 200], self.board_size, 2)
+        if random_positions:
+            pos_player1, pos_player2 = np.random.rand(2, 2)
+        else:
+            pos_player1 = [0.2, 0.2]
+            pos_player2 = [0.8, 0.8]
+
+        self.player1 = Player([a * b for a, b in zip(pos_player1, self.board_size)], self.board_size, 1)
+        self.player2 = Player([a * b for a, b in zip(pos_player2, self.board_size)], self.board_size, 2)
 
         self.ticks = 0
         self.game_live = True
@@ -159,5 +165,5 @@ class SkillshotGame(object):
             feature_dict[player.id] = player_feature_dict
         return feature_dict
 
-    def game_reset(self):
-        self.__init__()
+    def game_reset(self, random_positions=False):
+        self.__init__(random_positions=False)

@@ -42,6 +42,7 @@ class SkillshotLearner(object):
         self.game_environment = SkillshotGame()
         self.player_ids = (1, 2)
         self.max_dist_normaliser = (2 * (250 ** 2)) ** 0.5
+        self.use_random_start = True
 
         # dir locations
         self.save_location = "training_models"
@@ -203,11 +204,13 @@ class SkillshotLearner(object):
         # checks threshold to see if model acts or random acts,
         # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
 
-        # instead, use state space noise
+        # instead, use state space noise TODO not implemented
+
         # prepare features for the actor give as list with length 1, extract from list with length 1
         features = self.prepare_states([game_state], player_id)[0]
         # take prepared features, pass to actor model
         predictions = self.model_actor.predict(np.expand_dims(features, 0))
+        print(predictions)
 
         # perform the predicted action(s)
         self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0][0])
@@ -226,7 +229,7 @@ class SkillshotLearner(object):
 
         for epoch in range(epochs):
             # reset the game and epoch data lists TODO add reset to random positions inside SkillshotGame
-            self.game_environment.game_reset()
+            self.game_environment.game_reset(random_positions=self.use_random_start)
             cur_epoch_prog = dict(game_state=[],
                                   player_actions=dict((player, []) for player in self.player_ids),
                                   player_rewards=dict((player, []) for player in self.player_ids),
@@ -251,6 +254,7 @@ class SkillshotLearner(object):
                     cur_epoch_prog.get("game_boards").append(self.game_environment.get_board())
 
             # game ends, fitting preparation begins
+            print("Begin Fitting for Epoch:", epoch)
 
             # prepare rewards - initial state has no reward so ignore
             rewards = self.calculate_rewards(cur_epoch_prog.get("game_state")[1:])
@@ -297,8 +301,9 @@ class SkillshotLearner(object):
                 total_epoch_progress.get("epoch_board_sequences").append(cur_epoch_prog.get("game_boards"))
 
             # after each epoch ends, print epoch performance
-            print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game_environment.ticks,
-                                                                             self.game_environment.winner_id))
+            print("Epoch {} Completed, ticks taken: {}, game winner: {}".format(epoch,
+                                                                                self.game_environment.ticks,
+                                                                                self.game_environment.winner_id))
 
         # after all epochs are completed, print overall performance
         print("All Epochs Completed")
@@ -326,7 +331,7 @@ class SkillshotLearner(object):
         rewards = rewards[indices]
 
         # first fit the critic
-        self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=0)
+        self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
 
         # set up the actor fitting loop
 
@@ -520,7 +525,8 @@ class SkillshotLearner(object):
 
 def main():
     skl = SkillshotLearner()
-    skl.model_param_game_tick_limit = 10
+    skl.model_param_game_tick_limit = 1000
+    skl.use_random_start = False
     skl.model_define_actor()
     skl.model_define_critic()
     skl.model_train(epochs=5, save_progress=False, save_boards=True)

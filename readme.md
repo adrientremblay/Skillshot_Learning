@@ -16,3 +16,6 @@ More information can be found https://openai.com/blog/better-exploration-with-pa
 add planning policy - take inputs for previous [5, 10, 20] frames and process in planning model
 outputting a 2d, [short, medium, long] idea representation array - which can be fed into mode actor
 or planning policy can also be implemented by feeding multiple frames into actor and allowing for deep planning learning
+
+changing the game speed variables as the model trains or after training could produce intreting results
+see if model is able to adapt to different speeds

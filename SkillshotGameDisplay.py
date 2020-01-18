@@ -38,4 +38,4 @@ class SkillshotGameDisplay(object):
             pygame.display.flip()
 
             # Frame-rate limit
-            self.clock.tick(60)
+            self.clock.tick(30)
