@@ -49,6 +49,7 @@ class SkillshotLearner(object):
         self.actor_dir_name = "actor"
         self.critic_dir_name = "critic"
         self.training_progress_dir_name = "training_progress"
+        self.training_boards_dir_name = "training_boards"
 
         # model
         self.model_actor = None
@@ -164,6 +165,30 @@ class SkillshotLearner(object):
         pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
         print("Training Progress Saved")
 
+    def save_training_boards(self, epoch_board_list):
+        boards_save_location = self.save_location + "/" + self.training_boards_dir_name
+        # Todo simply saves on top ignoring pre-existing
+
+        # check if folders exist if not, create
+        if not os.path.exists(boards_save_location):
+            os.makedirs(boards_save_location)
+
+        # save progress using np.save, no append mode, so always in a new file
+        array = np.array(epoch_board_list)
+        np.save(boards_save_location + "/training_boards", array)
+        print("Training Boards Saved")
+
+    def load_training_boards(self):
+        boards_save_location = self.save_location + "/" + self.training_boards_dir_name
+        # TODO add check for if file exists
+        # lines_to_read = epoch_end - epoch_start
+        # assert lines_to_read > 0
+
+        # TODO when changing save func, need to also change here so that the one to load can be specified
+        # currently loads the single fie
+
+        return np.load(boards_save_location + "/training_boards.npy")
+
     def model_act(self, game_state, player_id):
         # uses the actor to make a prediction and then acts the single given player
         # returning the action output for future training
@@ -187,18 +212,19 @@ class SkillshotLearner(object):
         # also return the actor output
         return predictions
 
-    def model_train(self, epochs):
+    def model_train(self, epochs, save_progress, save_boards):
         # main training loop for model
 
         # create the epoch-persistent progress dicts
-        total_epoch_progress = dict(epoch_ticks=[], epoch_winner=[])
+        total_epoch_progress = dict(epoch_ticks=[], epoch_winner=[], epoch_board_sequences=[])
 
         for epoch in range(epochs):
             # reset the game and epoch data lists TODO add reset to random positions inside SkillshotGame
             self.game_environment.game_reset()
             cur_epoch_prog = dict(game_state=[],
                                   player_actions=dict((player, []) for player in self.player_ids),
-                                  player_rewards=dict((player, []) for player in self.player_ids))
+                                  player_rewards=dict((player, []) for player in self.player_ids),
+                                  game_boards=[])
 
             # get starting state
             game_state = self.game_environment.get_state()
@@ -211,9 +237,12 @@ class SkillshotLearner(object):
                     cur_epoch_prog.get("player_actions").get(player_id).append(self.model_act(game_state, player_id))
                 # tick the game
                 self.game_environment.game_tick()
-                # get and save the resultant game state - and possibly the get_board
+                # get and save the resultant game state
                 game_state = self.game_environment.get_state()
                 cur_epoch_prog.get("game_state").append(game_state)
+                # get and save the game_board for future visualisation
+                if save_boards:
+                    cur_epoch_prog.get("game_boards").append(self.game_environment.get_board())
 
             # game ends, fitting preparation begins
 
@@ -257,17 +286,23 @@ class SkillshotLearner(object):
             # move the features and targets to epoch-persistent progress dict
             total_epoch_progress.get("epoch_ticks").append(self.game_environment.ticks)
             total_epoch_progress.get("epoch_winner").append(self.game_environment.winner_id)
+            # also move the game board for future visualiation
+            if save_boards:
+                total_epoch_progress.get("epoch_board_sequences").append(cur_epoch_prog.get("game_boards"))
 
             # after each epoch ends, print epoch performance
             print("Epoch Completed, ticks taken: {}, game winner: {}".format(self.game_environment.ticks,
                                                                              self.game_environment.winner_id))
 
         # after all epochs are completed, print overall performance
-        print("Training Completed")
-        # save model and finish TODO move to main
-        # self.save_actor_critic_models(epochs)
-        # self.save_training_progress(total_epoch_progress)
-        print("model_train done.")
+        print("All Epochs Completed")
+
+        if save_progress:
+            # save model and finish
+            self.save_actor_critic_models(epochs)
+            self.save_training_progress(total_epoch_progress)
+        if save_boards:
+            self.save_training_boards(total_epoch_progress.get("epoch_board_sequences"))
 
     def models_fit(self, states, actions, rewards):
         # fits the critic model, then transfers the weights to the actor model
@@ -324,7 +359,7 @@ class SkillshotLearner(object):
             actual_critic_action_grads = critic_action_grads([state, action])
             # print(actual_critic_action_grads[0][0][0], "actual")
 
-            # tape is cleared after .gradient call, output_gradients should be equliv to grad_ys
+            # tape is cleared after .gradient call, output_gradients should be equivalent to grad_ys
             # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
             actor_training_grads = tape.gradient(action_tensor,
                                                  self.model_actor.trainable_weights,
@@ -370,7 +405,8 @@ class SkillshotLearner(object):
             prepared_states.append(current_state)
         return prepared_states
 
-    def prepare_actions(self, actions, player_id):
+    @staticmethod
+    def prepare_actions(actions, player_id):
         # prepares the actions taken by the players for model training
         # returns list of trainable shape containing the actions for the given player
         # other player's actions are ignored
@@ -384,7 +420,8 @@ class SkillshotLearner(object):
             prepared_actions.append(action[0])
         return prepared_actions
 
-    def prepare_rewards(self, rewards, player_id):
+    @staticmethod
+    def prepare_rewards(rewards, player_id):
         # prepares the rewards for actions for model training
         # returns list of trainable shape containing the rewards for the given player
         # other player's rewards are ignored
@@ -459,17 +496,27 @@ class SkillshotLearner(object):
         # plots the training progress
         pass
 
-    def display_training_replay(self, boards):
-        # takes list of boards and displays them using pygame to visualise training afterwards
-        pass
+    def display_training_replay(self):
+        # loads the boards and displays them using pygame to visualise training afterwards
+        from SkillshotGameDisplay import SkillshotGameDisplay
+        game_display = SkillshotGameDisplay()
+
+        epoch_board_lists = self.load_training_boards()
+
+        for epoch_boards in epoch_board_lists:
+            game_display.display_sequence(epoch_boards)
+            print("Epoch Over")
 
 
 def main():
-    skillshotLearner = SkillshotLearner()
-    skillshotLearner.model_param_game_tick_limit = 10
-    skillshotLearner.model_define_actor()
-    skillshotLearner.model_define_critic()
-    skillshotLearner.model_train(5)
+    skl = SkillshotLearner()
+    skl.model_param_game_tick_limit = 10
+    skl.model_define_actor()
+    skl.model_define_critic()
+    skl.model_train(epochs=5, save_progress=False, save_boards=True)
+
+    # skl.display_training_replay()
 
 
-main()
+if __name__ == "__main__":
+    main()
