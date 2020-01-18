@@ -285,65 +285,57 @@ class SkillshotLearner(object):
         rewards = rewards[indices]
 
         # first fit the critic
-        self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
+        self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=0)
 
-        # fit the actor
+        # set up the actor fitting loop
 
-        # get the effect of action on reward / gradient / dQ/dA
-        grad_from_critic = k.gradients(self.model_critic.outputs, self.model_critic.inputs[1])
-
-        # get gradients of reward with respect to action in critic
+        # get gradients of reward with respect to action in critic / effect of action on reward / dQ/dA
         critic_action_grads = k.gradients(self.model_critic.output, self.model_critic.inputs[1])
         # place into k func so it can be called
         critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]],
                                          [critic_action_grads])
 
-        # get gradient and variable pairs in the actor that are to be trained
-        # gradient of actor's actions at every weight
-        actor_grads = k.gradients(self.model_actor.output,
-                                  self.model_actor.trainable_weights)  # grad_ys needs to be phold_grads
-        actor_grads = k.function([self.model_actor.inputs], [actor_grads])
+        # # sets up k.backend funcs to get gradients for trainable weights inside the actor
+        # # k.gradients does not support grad_ys, which is why it cannot be used
+        # actor_grads = k.gradients(self.model_actor.output, self.model_actor.trainable_weights)
+        # actor_grads = k.function([self.model_actor.inputs], [actor_grads])
+        # # calling the following will return the actor grads for the current state (when looping state)
+        # actual_actor_grads = actor_grads([state])
 
         # create tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed
         optimiser = tf.keras.optimizers.Adam()
 
-        for state, _ in zip(states, actions):  # can be done in batches
-            state = np.expand_dims(state, 0)  # bodge, move into for loop
+        # enter the actor training loop
+        for state in states:  # can be done in batches - currently batch size is 1
+            state = np.expand_dims(state, 0)  # bodge, move into for loop - expands for batch size of 1
 
-            # get action for current model state
-            action = self.model_actor.predict(state)
-
-            # get the actual critc action grads for current call
-            actual_critic_action_grads = critic_action_grads([state, action])
-            print(actual_critic_action_grads[0][0][0], "actual")
-
-            # get the actual actor grads for the current call
-            actual_actor_grads = actor_grads([state])
-
-            # the follwing is to replace the below line from tf1.
+            # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
             # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
 
-            # set up the tape
+            # set up the tape, stuff should be watched automatically
             with tf.GradientTape() as tape:
-                out = self.model_actor(k.variable(state))  # not predict, needs to return tensor
+                # pass the state through / make a prediction to get the values in the graph
+                action_tensor = self.model_actor(k.variable(state))  # not using .predict, needs to return tensor
 
-            yeet = tape.gradient(out, self.model_actor.trainable_weights, output_gradients=-actual_critic_action_grads[0][0][0])
-            # yeet = tape.gradient(out, self.model_actor.trainable_weights)  # tape is cleared after .gradient call
-            print(yeet, "grads")
+            # TODO this part exits and re-enters the graph - possibly modify to stay in graph
+            # convert the action tensor to actual value so the critic action grads can  be calculated
+            action = k.eval(action_tensor)
+            # get the actual critic action grads for current call
+            actual_critic_action_grads = critic_action_grads([state, action])
+            # print(actual_critic_action_grads[0][0][0], "actual")
 
-            # grads_and_vars_to_train = zip(actor_grads, self.model_actor.trainable_weights)
-            # instead of using grad_ys, multiply the grad_ys in
-            grads_and_vars_to_train = zip(yeet, self.model_actor.trainable_weights)
-            # grads_and_vars_to_train = zip(actual_critic_action_grads[0], self.model_actor.trainable_weights)
+            # tape is cleared after .gradient call, output_gradients should be equliv to grad_ys
+            # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
+            actor_training_grads = tape.gradient(action_tensor,
+                                                 self.model_actor.trainable_weights,
+                                                 output_gradients=-actual_critic_action_grads[0][0][0])
 
-            print("DONE-----------")
-            # func = k.function([self.model_actor.inputs], [optimiser.apply_gradients(grads_and_vars_to_train)])
+            # pair up the grads and weights/variables to train
+            grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
+            # perform the gradient application, simply call in eager mode to run
+            optimiser.apply_gradients(grads_and_vars_to_train)
 
-            # perform the gradient application
-            optimiser.apply_gradients(grads_and_vars_to_train)  # in eager mode simply call to update
-            # func([state, critic_action_grads])
-
-            print("HERE_______________")
+        print("Fitting finished")
 
     def prepare_states(self, game_states, player_id):
         # prepares the game_states for training - takes list of game states and player id
