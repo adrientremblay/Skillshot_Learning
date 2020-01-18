@@ -8,7 +8,6 @@ from keras import backend as k
 from keras import Input, Model
 from keras.layers import Dense, GaussianNoise, concatenate
 
-
 from SkillshotGame import SkillshotGame
 
 
@@ -82,7 +81,7 @@ class SkillshotLearner(object):
                              name="action_output")(layer_model)
 
         # compile model
-        actor = Model(state_input, layer_output, name="actor",)
+        actor = Model(state_input, layer_output, name="actor")
         # actor.compile(optimizer="adam", loss="mse")  # using default learning rate
         actor.summary()
 
@@ -164,6 +163,13 @@ class SkillshotLearner(object):
         # save progress using pandas to_csv with append mode
         pd.DataFrame(total_progress).to_csv(progress_save_location + "/training_progress.csv", mode="a")
         print("Training Progress Saved")
+
+    def load_training_progress(self):
+        # load the training progress csv and returns it
+        progress_save_location = self.save_location + "/" + self.training_progress_dir_name
+        # TODO add check for if file exists
+
+        return pd.read_csv(progress_save_location + "/training_progress.csv")
 
     def save_training_boards(self, epoch_board_list):
         boards_save_location = self.save_location + "/" + self.training_boards_dir_name
@@ -494,7 +500,11 @@ class SkillshotLearner(object):
 
     def plot_training(self):
         # plots the training progress
-        pass
+        import matplotlib.pyplot as plt
+
+        training_progress_df = self.load_training_progress()
+
+        training_progress_df.plot()
 
     def display_training_replay(self):
         # loads the boards and displays them using pygame to visualise training afterwards
