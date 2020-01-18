@@ -356,6 +356,8 @@ class SkillshotLearner(object):
             state = np.expand_dims(state, 0)  # bodge, move into for loop - expands for batch size of 1
 
             # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
+            # every example ever calls tf.gradients() with 3 positional arguments (tf1),
+            # but am unable to find a point in git history where there is a 3rd argument
             # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
 
             # set up the tape, stuff should be watched automatically
@@ -525,13 +527,13 @@ class SkillshotLearner(object):
 
 def main():
     skl = SkillshotLearner()
-    skl.model_param_game_tick_limit = 1000
-    skl.use_random_start = False
-    skl.model_define_actor()
-    skl.model_define_critic()
-    skl.model_train(epochs=5, save_progress=False, save_boards=True)
+    # skl.model_param_game_tick_limit = 1000
+    # skl.use_random_start = False
+    # skl.model_define_actor()
+    # skl.model_define_critic()
+    # skl.model_train(epochs=5, save_progress=False, save_boards=True)
 
-    # skl.display_training_replay()
+    skl.display_training_replay()
 
 
 if __name__ == "__main__":

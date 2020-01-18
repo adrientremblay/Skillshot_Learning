@@ -26,6 +26,7 @@ class SkillshotGameDisplay(object):
 
     def display_sequence(self, boards):
         # takes list of boards for a single epoch and displays them
+        # TODO change to use while loop and get new board every frame instead
         for board in boards:
             # Draw the combined board on the surface_board
             for index_y, row_x in enumerate(board):
