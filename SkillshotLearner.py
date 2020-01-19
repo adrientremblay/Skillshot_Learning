@@ -6,7 +6,7 @@ import tensorflow as tf
 import keras
 from keras import backend as k
 from keras import Input, Model
-from keras.layers import Dense, GaussianNoise, concatenate
+from keras.layers import Dense, GaussianNoise, concatenate, Dropout
 
 from SkillshotGame import SkillshotGame
 
@@ -61,7 +61,7 @@ class SkillshotLearner(object):
         # model hyper-params
         # self.model_param_mutate_threshold = 0.25  # using state space noise instead of action space noise
         self.model_param_batch_size = 16
-        self.model_param_game_tick_limit = 10000
+        self.model_param_game_tick_limit = 2000
 
     def model_define_actor(self):
         # define an actor model, which chooses actions based on the game's state
@@ -78,7 +78,7 @@ class SkillshotLearner(object):
         # tanh activation is from -1 to 1, which is the correct range for the moves
         layer_output = Dense(self.dim_action_space,
                              activation="tanh",
-                             kernel_initializer="RandomNormal",
+                             # kernel_initializer="RandomNormal",
                              name="action_output")(layer_model)
 
         # compile model
@@ -94,8 +94,8 @@ class SkillshotLearner(object):
         # inputs
         state_input = Input((self.dim_state_space,), name="state_input")
         actor_input = Input((self.dim_action_space,), name="action_input")  # same shape as the actor's output layer
-
         layer_model = Dense(256, activation="relu")(state_input)
+        layer_model = Dropout(0.2)(layer_model)  # preventing overfitting of the game state
         layer_model = concatenate([layer_model, actor_input])  # concat the actions with the state
         layer_model = Dense(128, activation="relu")(layer_model)
 
@@ -502,6 +502,7 @@ class SkillshotLearner(object):
                 player_index = (player_id + 1) % len(self.player_ids)
                 player_reward = (dist_list[opponent_index] - (dist_list[player_index] * reward_multi)) + min_dist * 2
                 state_reward[player_id] = player_reward / self.max_dist_normaliser
+                # print(player_reward / self.max_dist_normaliser)
             rewards.append(state_reward)
         return rewards
 
@@ -527,11 +528,12 @@ class SkillshotLearner(object):
 
 def main():
     skl = SkillshotLearner()
-    # skl.model_param_game_tick_limit = 1000
-    # skl.use_random_start = False
-    # skl.model_define_actor()
-    # skl.model_define_critic()
-    # skl.model_train(epochs=5, save_progress=False, save_boards=True)
+
+    skl.model_param_game_tick_limit = 100
+    skl.use_random_start = True
+    skl.model_define_actor()
+    skl.model_define_critic()
+    skl.model_train(epochs=10, save_progress=False, save_boards=True)
 
     skl.display_training_replay()
 

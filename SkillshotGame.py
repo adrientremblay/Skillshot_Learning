@@ -166,4 +166,4 @@ class SkillshotGame(object):
         return feature_dict
 
     def game_reset(self, random_positions=False):
-        self.__init__(random_positions=False)
+        self.__init__(random_positions=random_positions)
