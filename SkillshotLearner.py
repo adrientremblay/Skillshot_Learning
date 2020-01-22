@@ -336,7 +336,7 @@ class SkillshotLearner(object):
         # set up the actor fitting loop
 
         # get gradients of reward with respect to action in critic / effect of action on reward / dQ/dA
-        critic_action_grads = k.gradients(self.model_critic.output, self.model_critic.inputs[1])
+        critic_action_grads = k.gradients(self.model_critic.outputs[0], self.model_critic.inputs[1])
         # place into k func so it can be called
         critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]],
                                          [critic_action_grads])
@@ -354,6 +354,7 @@ class SkillshotLearner(object):
         # enter the actor training loop
         for state in states:  # can be done in batches - currently batch size is 1
             state = np.expand_dims(state, 0)  # bodge, move into for loop - expands for batch size of 1
+            state_tensor = tf.constant(state, dtype=tf.float32)
 
             # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
             # every example ever calls tf.gradients() with 3 positional arguments (tf1),
@@ -361,22 +362,18 @@ class SkillshotLearner(object):
             # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
 
             # set up the tape, stuff should be watched automatically
-            with tf.GradientTape() as tape:
+            with tf.GradientTape(persistent=True, watch_accessed_variables=True) as tape:
                 # pass the state through / make a prediction to get the values in the graph
-                action_tensor = self.model_actor(k.variable(state))  # not using .predict, needs to return tensor
+                action_tensor = self.model_actor(state_tensor)  # not using .predict, needs to return tensor
 
-            # TODO this part exits and re-enters the graph - possibly modify to stay in graph
-            # convert the action tensor to actual value so the critic action grads can  be calculated
-            action = k.eval(action_tensor)
-            # get the actual critic action grads for current call
-            actual_critic_action_grads = critic_action_grads([state, action])
-            # print(actual_critic_action_grads[0][0][0], "actual")
+            # get the symbolic tensor for how the critic's q value changes depending on the action
+            symbolic_critic_grads = k.gradients(self.model_critic.outputs[0], self.model_critic.inputs[1])
 
             # tape is cleared after .gradient call, output_gradients should be equivalent to grad_ys
             # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
             actor_training_grads = tape.gradient(action_tensor,
                                                  self.model_actor.trainable_weights,
-                                                 output_gradients=-actual_critic_action_grads[0][0][0])
+                                                 output_gradients=-symbolic_critic_grads[0])
 
             # pair up the grads and weights/variables to train
             grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
@@ -533,7 +530,7 @@ def main():
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
-    skl.model_train(epochs=10, save_progress=False, save_boards=True)
+    skl.model_train(epochs=2, save_progress=False, save_boards=True)
 
     skl.display_training_replay()
 
