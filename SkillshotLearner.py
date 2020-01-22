@@ -291,7 +291,8 @@ class SkillshotLearner(object):
                    training_rewards.shape[0]
 
             # fit model
-            self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
+            self.models_fit_old_way(training_states, training_actions, training_rewards)
+            # self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
 
             # move the features and targets to epoch-persistent progress dict
             total_epoch_progress.get("epoch_ticks").append(self.game_environment.ticks)
@@ -314,6 +315,37 @@ class SkillshotLearner(object):
             self.save_training_progress(total_epoch_progress)
         if save_boards:
             self.save_training_boards(total_epoch_progress.get("epoch_board_sequences"))
+
+    def models_fit_old_way(self, states, actions, rewards):
+        # fits the old way
+
+        assert len(states) == len(actions) == len(rewards)
+
+        # first fit the critic
+        self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
+
+        # prep optimiser
+        optimiser = tf.keras.optimizers.Adam()
+        # prep critic grad func
+        critic_grad_func = k.gradients(self.model_critic.outputs[0], self.model_critic.inputs[1])
+        critic_grad_func = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]], [critic_grad_func])
+
+        # fit actor
+        for state in states:
+            state = np.expand_dims(state, 0)
+            state_tensor = tf.constant(state, dtype=tf.float32)
+
+            with tf.GradientTape() as actor_tape:
+                action_tensor = self.model_actor(state_tensor)
+
+            q_action_grads = critic_grad_func([state, k.eval(action_tensor)])
+
+            actor_training_grads = actor_tape.gradient(action_tensor,
+                                                       self.model_actor.trainable_weights,
+                                                       output_gradients=-q_action_grads[0][0][0])
+
+            grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
+            optimiser.apply_gradients(grads_and_vars_to_train)
 
     def models_fit(self, states, actions, rewards):
         # fits the critic model, then transfers the weights to the actor model
@@ -532,7 +564,7 @@ def main():
     skl.model_define_critic()
     skl.model_train(epochs=2, save_progress=False, save_boards=True)
 
-    skl.display_training_replay()
+    # skl.display_training_replay()
 
 
 if __name__ == "__main__":
