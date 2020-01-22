@@ -12,13 +12,13 @@ class SkillshotGame(object):
         self.board = np.zeros(self.board_size, dtype=int)
 
         if random_positions:
-            pos_player1, pos_player2 = np.random.rand(2, 2)
+            pos_player1, pos_player2 = np.random.randint(25, 225, (2, 2))
         else:
-            pos_player1 = [0.2, 0.2]
-            pos_player2 = [0.8, 0.8]
+            pos_player1 = [50, 50]
+            pos_player2 = [200, 200]
 
-        self.player1 = Player([a * b for a, b in zip(pos_player1, self.board_size)], self.board_size, 1)
-        self.player2 = Player([a * b for a, b in zip(pos_player2, self.board_size)], self.board_size, 2)
+        self.player1 = Player(pos_player1, self.board_size, 1)
+        self.player2 = Player(pos_player2,self.board_size, 2)
 
         self.ticks = 0
         self.game_live = True
