@@ -62,6 +62,9 @@ class SkillshotLearner(object):
         self.model_param_batch_size = 16
         self.model_param_game_tick_limit = 2000
 
+        # tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed during model_actor_fit_step
+        self.optimiser = tf.keras.optimizers.Adam()
+
     def model_define_actor(self):
         # define an actor model, which chooses actions based on the game's state
 
@@ -315,6 +318,36 @@ class SkillshotLearner(object):
         if save_boards:
             self.save_training_boards(total_epoch_progress.get("epoch_board_sequences"))
 
+    @tf.function
+    def model_actor_fit_step(self, state_tensor):
+        # fits the given state_tensor batch to the actor model
+        # the actor fitting routine as tf.function - first time it's called it constructs a graph
+        # but subsequent calls reuse the created graph
+
+        # this is not needed, as the tf.function decorator automatically makes the input a tensor
+        # state_tensor = tf.constant(state_batch, dtype=tf.float32)
+
+        with tf.GradientTape(persistent=True) as tape:
+            action_tensor = self.model_actor(state_tensor)
+            critic_q_tensor = self.model_critic([state_tensor, action_tensor])
+
+        # get the dQ/dA
+        q_action_grads = tape.gradient(critic_q_tensor, action_tensor)
+
+        # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
+        # every example ever calls tf.gradients() with 3 positional arguments (tf1),
+        # but unable to find point in git history where there is a 3rd argument, assume grad_ys == output_gradients
+        # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
+        # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
+
+        actor_training_grads = tape.gradient(action_tensor,
+                                             self.model_actor.trainable_weights,
+                                             output_gradients=-q_action_grads)
+
+        # pair up and apply the gradients to the actor's trainable weights
+        grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
+        self.optimiser.apply_gradients(grads_and_vars_to_train)
+
     def models_fit(self, states, actions, rewards):
         # fits models, keeping the tensors within the graph
 
@@ -333,33 +366,13 @@ class SkillshotLearner(object):
         self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
 
         # create tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed
-        optimiser = tf.keras.optimizers.Adam()
+        # self.optimiser = tf.keras.optimizers.Adam()
 
         # fit actor in batches
         for batch_index in range(0, len(states), self.model_param_batch_size):
             state_batch = states[batch_index:batch_index+self.model_param_batch_size]
-            state_tensor = tf.constant(state_batch, dtype=tf.float32)
-
-            with tf.GradientTape(persistent=True) as tape:
-                action_tensor = self.model_actor(state_tensor)
-                critic_q_tensor = self.model_critic([state_tensor, action_tensor])
-
-            # get the dQ/dA
-            q_action_grads = tape.gradient(critic_q_tensor, action_tensor)
-
-            # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
-            # every example ever calls tf.gradients() with 3 positional arguments (tf1),
-            # but unable to find point in git history where there is a 3rd argument, assume grad_ys == output_gradients
-            # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
-            # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
-
-            actor_training_grads = tape.gradient(action_tensor,
-                                                 self.model_actor.trainable_weights,
-                                                 output_gradients=-q_action_grads)
-
-            # pair up and apply the gradients to the actor's trainable weights
-            grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
-            optimiser.apply_gradients(grads_and_vars_to_train)
+            # call the tf.function actor fitting routine
+            self.model_actor_fit_step(state_batch)
 
     def models_fit_old(self, states, actions, rewards):
         # fits the critic model, then transfers the weights to the actor model
@@ -576,7 +589,7 @@ def main():
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
-    skl.model_train(epochs=2, save_progress=False, save_boards=True)
+    skl.model_train(epochs=5, save_progress=False, save_boards=True)
 
     # skl.display_training_replay()
 
