@@ -209,7 +209,7 @@ class SkillshotLearner(object):
         features = self.prepare_states([game_state], player_id)[0]
         # take prepared features, pass to actor model
         predictions = self.model_actor.predict(np.expand_dims(features, 0))
-        print(predictions)
+        # print(predictions)
 
         # perform the predicted action(s)
         self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0][0])
@@ -349,7 +349,7 @@ class SkillshotLearner(object):
 
             # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
             # every example ever calls tf.gradients() with 3 positional arguments (tf1),
-            # but unable to find point in git history where there is a 3rd argument, assume grad_ys = output_gradients
+            # but unable to find point in git history where there is a 3rd argument, assume grad_ys == output_gradients
             # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
             # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
 
@@ -382,10 +382,10 @@ class SkillshotLearner(object):
         # set up the actor fitting loop
 
         # get gradients of reward with respect to action in critic / effect of action on reward / dQ/dA
-        critic_action_grads = k.gradients(self.model_critic.outputs[0], self.model_critic.inputs[1])
+        # critic_action_grads = k.gradients(self.model_critic.outputs[0], self.model_critic.inputs[1])
         # place into k func so it can be called
-        critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]],
-                                         [critic_action_grads])
+        # critic_action_grads = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]],
+        #                                  [critic_action_grads])
 
         # # sets up k.backend funcs to get gradients for trainable weights inside the actor
         # # k.gradients does not support grad_ys, which is why it cannot be used
