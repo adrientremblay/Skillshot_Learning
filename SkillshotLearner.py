@@ -335,10 +335,10 @@ class SkillshotLearner(object):
         # create tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed
         optimiser = tf.keras.optimizers.Adam()
 
-        # fit actor
-        for state in states:
-            state = np.expand_dims(state, 0)
-            state_tensor = tf.constant(state, dtype=tf.float32)
+        # fit actor in batches
+        for batch_index in range(0, len(states), self.model_param_batch_size):
+            state_batch = states[batch_index:batch_index+self.model_param_batch_size]
+            state_tensor = tf.constant(state_batch, dtype=tf.float32)
 
             with tf.GradientTape(persistent=True) as tape:
                 action_tensor = self.model_actor(state_tensor)
@@ -572,7 +572,7 @@ class SkillshotLearner(object):
 def main():
     skl = SkillshotLearner()
 
-    skl.model_param_game_tick_limit = 10
+    skl.model_param_game_tick_limit = 100
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
