@@ -3,10 +3,9 @@ import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import keras
-from keras import backend as k
-from keras import Input, Model
-from keras.layers import Dense, GaussianNoise, concatenate, Dropout
+from tensorflow.keras import backend as k
+from tensorflow.keras import Input, Model
+from tensorflow.keras.layers import Dense, GaussianNoise, concatenate, Dropout
 
 from SkillshotGame import SkillshotGame
 
@@ -70,9 +69,9 @@ class SkillshotLearner(object):
         state_input = Input((self.dim_state_space,), name="state_input")
 
         layer_model = Dense(256, activation="relu")(state_input)
-        # layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training
+        layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training
         layer_model = Dense(128, activation="relu")(layer_model)
-        # layer_model = GaussianNoise(1.0)(layer_model)
+        layer_model = GaussianNoise(1.0)(layer_model)
 
         # outputs
         # tanh activation is from -1 to 1, which is the correct range for the moves
@@ -121,7 +120,7 @@ class SkillshotLearner(object):
             files_list = os.listdir(model_save_location)
             files_list.sort(key=lambda x: int(x.split("_"[1])))
             if len(files_list) > 0:
-                model_location = keras.models.load_model(model_save_location + "/" + files_list[load_index])
+                model_location = tf.keras.models.load_model(model_save_location + "/" + files_list[load_index])
                 model_location.summary()
             else:
                 print("Failed to load: ", model_save_location)
@@ -228,7 +227,7 @@ class SkillshotLearner(object):
         total_epoch_progress = dict(epoch_ticks=[], epoch_winner=[], epoch_board_sequences=[])
 
         for epoch in range(epochs):
-            # reset the game and epoch data lists TODO add reset to random positions inside SkillshotGame
+            # reset the game and epoch data lists
             self.game_environment.game_reset(random_positions=self.use_random_start)
             cur_epoch_prog = dict(game_state=[],
                                   player_actions=dict((player, []) for player in self.player_ids),
@@ -290,9 +289,9 @@ class SkillshotLearner(object):
             assert (len(cur_epoch_prog.get("game_state")) - 1) * len(self.player_ids) == training_actions.shape[0] == \
                    training_rewards.shape[0]
 
-            # fit model
-            self.models_fit_old_way(training_states, training_actions, training_rewards)
-            # self.models_fit(training_states, training_actions, training_rewards)  # fit can be called a single time
+            # fit model, can be called a single time
+            self.models_fit(training_states, training_actions, training_rewards)
+            # self.models_fit(training_states, training_actions, training_rewards)
 
             # move the features and targets to epoch-persistent progress dict
             total_epoch_progress.get("epoch_ticks").append(self.game_environment.ticks)
@@ -316,38 +315,53 @@ class SkillshotLearner(object):
         if save_boards:
             self.save_training_boards(total_epoch_progress.get("epoch_board_sequences"))
 
-    def models_fit_old_way(self, states, actions, rewards):
-        # fits the old way
+    def models_fit(self, states, actions, rewards):
+        # fits models, keeping the tensors within the graph
 
         assert len(states) == len(actions) == len(rewards)
+
+        # shuffle features, targets, rewards and train with lower batch size for increased generalisation
+        assert states.shape[0] == actions.shape[0] == rewards.shape[0]
+        indices = np.arange(states.shape[0])
+        np.random.shuffle(indices)
+
+        states = states[indices]
+        actions = actions[indices]
+        rewards = rewards[indices]
 
         # first fit the critic
         self.model_critic.fit([states, actions], rewards, batch_size=self.model_param_batch_size, verbose=1)
 
-        # prep optimiser
+        # create tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed
         optimiser = tf.keras.optimizers.Adam()
-        # prep critic grad func
-        critic_grad_func = k.gradients(self.model_critic.outputs[0], self.model_critic.inputs[1])
-        critic_grad_func = k.function([self.model_critic.inputs[0], self.model_critic.inputs[1]], [critic_grad_func])
 
         # fit actor
         for state in states:
             state = np.expand_dims(state, 0)
             state_tensor = tf.constant(state, dtype=tf.float32)
 
-            with tf.GradientTape() as actor_tape:
+            with tf.GradientTape(persistent=True) as tape:
                 action_tensor = self.model_actor(state_tensor)
+                critic_q_tensor = self.model_critic([state_tensor, action_tensor])
 
-            q_action_grads = critic_grad_func([state, k.eval(action_tensor)])
+            # get the dQ/dA
+            q_action_grads = tape.gradient(critic_q_tensor, action_tensor)
 
-            actor_training_grads = actor_tape.gradient(action_tensor,
-                                                       self.model_actor.trainable_weights,
-                                                       output_gradients=-q_action_grads[0][0][0])
+            # the following is to replace the below line from tf1, where a feed dict can be used when entering graph
+            # every example ever calls tf.gradients() with 3 positional arguments (tf1),
+            # but unable to find point in git history where there is a 3rd argument, assume grad_ys = output_gradients
+            # https://stackoverflow.com/questions/42399401/use-of-grads-ys-parameter-in-tf-gradients-tensorflow
+            # tf.gradients(self.model_actor.outputs, self.model_actor.trainable_weights, grad_ys=phold_grads)
 
+            actor_training_grads = tape.gradient(action_tensor,
+                                                 self.model_actor.trainable_weights,
+                                                 output_gradients=-q_action_grads)
+
+            # pair up and apply the gradients to the actor's trainable weights
             grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
             optimiser.apply_gradients(grads_and_vars_to_train)
 
-    def models_fit(self, states, actions, rewards):
+    def models_fit_old(self, states, actions, rewards):
         # fits the critic model, then transfers the weights to the actor model
 
         # assertions to ensure inputs are correct length
@@ -558,7 +572,7 @@ class SkillshotLearner(object):
 def main():
     skl = SkillshotLearner()
 
-    skl.model_param_game_tick_limit = 100
+    skl.model_param_game_tick_limit = 10
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
