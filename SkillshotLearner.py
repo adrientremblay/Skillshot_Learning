@@ -58,9 +58,9 @@ class SkillshotLearner(object):
         self.dim_reward_space = 1  # 1d list
 
         # model hyper-params
-        # self.model_param_mutate_threshold = 0.25  # using state space noise instead of action space noise
         self.model_param_batch_size = 16
         self.model_param_game_tick_limit = 2000
+        self.action_noise_sd = 0.15
 
         # tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed during model_actor_fit_step
         self.optimiser = tf.keras.optimizers.Adam()
@@ -196,31 +196,54 @@ class SkillshotLearner(object):
         # TODO when changing save func, need to also change here so that the one to load can be specified
         # currently loads the single fie
 
-        return np.load(boards_save_location + "/training_boards.npy")
+        return np.load(boards_save_location + "/training_boards.npy", allow_pickle=True)
+
+    def do_actions(self, player_id, predictions):
+        # takes actions and actually performs them on the environment
+
+        # perform the predicted action(s)
+        self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0])
+        self.game_environment.get_player_by_id(player_id).move_look_float(predictions[1])
+        # move_shoot_projectile is attempted every time to simplify model
+        self.game_environment.get_player_by_id(player_id).move_shoot_projectile()
 
     def model_act(self, game_state, player_id):
         # uses the actor to make a prediction and then acts the single given player
         # returning the action output for future training
 
-        # for action space noise:
-        # checks threshold to see if model acts or random acts,
-        # mutate threshold of 0 means all model moves, threshold of 1 means all random moves
+        # prepare features for the actor give as list with length 1, extract from list with length 1
+        features = self.prepare_states([game_state], player_id)[0]
+        # take prepared features, pass to actor model
+        predictions = self.model_actor.predict(np.expand_dims(features, 0))
 
-        # instead, use state space noise TODO not implemented
+        # perform the predicted action(s), exiting out of batch dim
+        self.do_actions(player_id, predictions[0])
+
+        return predictions
+
+    def model_act_action_noise(self, game_state, player_id):
+        # creates an action for the model to take, adding noise to the predicted actions / simple action noise
 
         # prepare features for the actor give as list with length 1, extract from list with length 1
         features = self.prepare_states([game_state], player_id)[0]
         # take prepared features, pass to actor model
         predictions = self.model_actor.predict(np.expand_dims(features, 0))
-        # print(predictions)
 
-        # perform the predicted action(s)
-        self.game_environment.get_player_by_id(player_id).move_direction_float(predictions[0][0])
-        self.game_environment.get_player_by_id(player_id).move_look_float(predictions[0][1])
-        # move_shoot_projectile is attempted every time to simplify model
-        self.game_environment.get_player_by_id(player_id).move_shoot_projectile()
+        # add noise to the predictions, which are in the range -1, 1
+        predictions += np.random.normal(0, self.action_noise_sd, size=self.dim_action_space)
 
-        # also return the actor output
+        # perform the predicted action(s), exiting out of batch dim
+        self.do_actions(player_id, predictions[0])
+
+        return predictions
+
+    def model_act_param_noise(self, game_state, player_id):
+        # takes the model weights, adds noise, and predicts using the modified model params
+        # https://openai.com/blog/better-exploration-with-parameter-noise/
+
+        w = self.model_actor.trainable_weights
+        [print(ww.shape for ww in w]
+
         return predictions
 
     def model_train(self, epochs, save_progress, save_boards):
@@ -242,10 +265,13 @@ class SkillshotLearner(object):
             cur_epoch_prog.get("game_state").append(game_state)
 
             # enter training loop
-            while self.game_environment.game_live and self.game_environment.ticks <= self.model_param_game_tick_limit:
+            while self.game_environment.game_live and self.game_environment.ticks < self.model_param_game_tick_limit:
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
-                    cur_epoch_prog.get("player_actions").get(player_id).append(self.model_act(game_state, player_id))
+                    # player_action = self.model_act(game_state, player_id)
+                    # player_action = self.model_act_action_noise(game_state, player_id)
+                    player_action = self.model_act_param_noise(game_state, player_id)
+                    cur_epoch_prog.get("player_actions").get(player_id).append(player_action)
                 # tick the game
                 self.game_environment.game_tick()
                 # get and save the resultant game state
@@ -585,11 +611,12 @@ class SkillshotLearner(object):
 def main():
     skl = SkillshotLearner()
 
-    skl.model_param_game_tick_limit = 100
+    skl.model_param_game_tick_limit = 300
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
-    skl.model_train(epochs=5, save_progress=False, save_boards=True)
+    # skl.model_train(epochs=5, save_progress=False, save_boards=True)
+    skl.model_train(epochs=5, save_progress=False, save_boards=False)
 
     # skl.display_training_replay()
 
