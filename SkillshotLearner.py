@@ -258,7 +258,7 @@ class SkillshotLearner(object):
 
         # apply noise to noisy weights
         for layer_weights in noisy_weights:
-            # split out for future testing, but if is redundant
+            # split out for future testing, but ifs are redundant
             if len(layer_weights.shape) == 2:  # 2d, bias (+)
                 layer_weights += (layer_weights * np.random.normal(0, self.param_noise_sd, size=layer_weights.shape))
             elif len(layer_weights.shape) == 1:  # 1d, gradient / weight (*)
@@ -640,9 +640,11 @@ class SkillshotLearner(object):
 
         epoch_board_lists = self.load_training_boards()
 
-        for epoch_boards in epoch_board_lists:
-            game_display.display_sequence(epoch_boards)
-            print("Epoch Over")
+        for index, epoch_boards in enumerate(epoch_board_lists):
+            game_display.display_sequence(epoch_boards, index)
+            print("Epoch {} of {} Over".format(index, len(epoch_board_lists)))
+
+        game_display.close_window()
 
 
 def main():
