@@ -246,12 +246,17 @@ class SkillshotLearner(object):
         # takes the model weights, adds noise, and predicts using the modified model params
         # https://openai.com/blog/better-exploration-with-parameter-noise/
 
+        # attempted change to tf.function, using tf.random.normal
+        # layer weights and .set_weights() only accept np.arrays, not tensors
+        # setting weights with tensors will not be implemented
+        # https://github.com/tensorflow/tensorflow/issues/29663
+        # https://github.com/keras-team/keras/issues/11143
+
         # get the existing model weights and save for later
         existing_weights = self.model_actor.get_weights()  # self.model_actor.trainable_weights, assume trainable
         noisy_weights = [layer_w.copy() for layer_w in existing_weights]  # deep(er) copy the np.arrays
 
         # apply noise to noisy weights
-        # TODO change to use tf.random.normal(), and set to tf.function
         for layer_weights in noisy_weights:
             # split out for future testing, but if is redundant
             if len(layer_weights.shape) == 2:  # 2d, bias (+)
