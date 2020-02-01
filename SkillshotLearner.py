@@ -61,6 +61,8 @@ class SkillshotLearner(object):
         self.model_param_batch_size = 16
         self.model_param_game_tick_limit = 2000
         self.action_noise_sd = 0.15
+        self.param_noise_sd = 0.15
+        # self.grad_clip_ratio = 5.0
 
         # tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed during model_actor_fit_step
         self.optimiser = tf.keras.optimizers.Adam()
@@ -244,8 +246,32 @@ class SkillshotLearner(object):
         # takes the model weights, adds noise, and predicts using the modified model params
         # https://openai.com/blog/better-exploration-with-parameter-noise/
 
-        w = self.model_actor.trainable_weights
-        [print(ww.shape for ww in w]
+        # get the existing model weights and save for later
+        existing_weights = self.model_actor.get_weights()  # self.model_actor.trainable_weights, assume trainable
+        noisy_weights = [layer_w.copy() for layer_w in existing_weights]  # deep(er) copy the np.arrays
+
+        # apply noise to noisy weights
+        # TODO change to use tf.random.normal(), and set to tf.function
+        for layer_weights in noisy_weights:
+            # split out for future testing, but if is redundant
+            if len(layer_weights.shape) == 2:  # 2d, bias (+)
+                layer_weights += (layer_weights * np.random.normal(0, self.param_noise_sd, size=layer_weights.shape))
+            elif len(layer_weights.shape) == 1:  # 1d, gradient / weight (*)
+                layer_weights += (layer_weights * np.random.normal(0, self.param_noise_sd, size=layer_weights.shape))
+
+        # apply the noisy weights
+        self.model_actor.set_weights(noisy_weights)
+        # make a prediction using the noisy weights
+        features = self.prepare_states([game_state], player_id)[0]
+        predictions = self.model_actor.predict(np.expand_dims(features, 0))
+        # reset the weights to the original weights
+        self.model_actor.set_weights(existing_weights)
+
+        # print(self.model_actor.predict(np.expand_dims(features, 0)), "normal")
+        # print(predictions, "noisy")
+
+        # perform the predicted action(s), exiting out of batch dim
+        self.do_actions(player_id, predictions[0])
 
         return predictions
 
@@ -372,6 +398,9 @@ class SkillshotLearner(object):
         actor_training_grads = tape.gradient(action_tensor,
                                              self.model_actor.trainable_weights,
                                              output_gradients=-q_action_grads)
+
+        # # clip gradients, also helps with param noise
+        # actor_training_grads = tf.clip_by_global_norm(actor_training_grads, self.grad_clip_ratio)
 
         # pair up and apply the gradients to the actor's trainable weights
         grads_and_vars_to_train = zip(actor_training_grads, self.model_actor.trainable_weights)
