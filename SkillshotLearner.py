@@ -68,19 +68,22 @@ class SkillshotLearner(object):
     def model_define_actor(self):
         # define an actor model, which chooses actions based on the game's state
 
+        k_init = tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.05)
+        # k_init = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.05)
+
         # inputs
         state_input = Input((self.dim_state_space,), name="state_input")
 
-        layer_model = Dense(256, activation="relu")(state_input)
-        layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training
-        layer_model = Dense(128, activation="relu")(layer_model)
-        layer_model = GaussianNoise(1.0)(layer_model)
+        layer_model = Dense(256, activation="relu", kernel_initializer=k_init)(state_input)
+        # layer_model = GaussianNoise(1.0)(layer_model)  # regularisation layer, only active during training
+        layer_model = Dense(128, activation="relu", kernel_initializer=k_init)(layer_model)
+        # layer_model = GaussianNoise(1.0)(layer_model)
 
         # outputs
         # tanh activation is from -1 to 1, which is the correct range for the moves
         layer_output = Dense(self.dim_action_space,
                              activation="tanh",
-                             # kernel_initializer="RandomNormal",
+                             kernel_initializer=k_init,
                              name="action_output")(layer_model)
 
         # compile model
@@ -396,7 +399,7 @@ class SkillshotLearner(object):
 
         # fit actor in batches
         for batch_index in range(0, len(states), self.model_param_batch_size):
-            state_batch = states[batch_index:batch_index+self.model_param_batch_size]
+            state_batch = states[batch_index:batch_index + self.model_param_batch_size]
             # call the tf.function actor fitting routine
             self.model_actor_fit_step(state_batch)
 
@@ -611,7 +614,7 @@ class SkillshotLearner(object):
 def main():
     skl = SkillshotLearner()
 
-    skl.model_param_game_tick_limit = 300
+    skl.model_param_game_tick_limit = 100
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
