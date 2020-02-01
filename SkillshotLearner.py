@@ -61,7 +61,7 @@ class SkillshotLearner(object):
         self.model_param_batch_size = 16
         self.model_param_game_tick_limit = 2000
         self.action_noise_sd = 0.15
-        self.param_noise_sd = 0.15
+        self.param_noise_sd = 0.5
         # self.grad_clip_ratio = 5.0
 
         # tf.keras.optimizers adam optimiser, because optimizer.apply_gradients() is needed during model_actor_fit_step
@@ -302,9 +302,11 @@ class SkillshotLearner(object):
             while self.game_environment.game_live and self.game_environment.ticks < self.model_param_game_tick_limit:
                 # do and save actions, model act is called twice (one for each player)
                 for player_id in self.player_ids:
+                    # do moves using a noise type
                     # player_action = self.model_act(game_state, player_id)
                     # player_action = self.model_act_action_noise(game_state, player_id)
                     player_action = self.model_act_param_noise(game_state, player_id)
+
                     cur_epoch_prog.get("player_actions").get(player_id).append(player_action)
                 # tick the game
                 self.game_environment.game_tick()
@@ -571,6 +573,7 @@ class SkillshotLearner(object):
                           base_reward_multiplier=0.75):
         # takes a list of states and calculates the reward or q-value for each state
         # returning a list of dicts with rewards for each player
+        # TODO simpler version of this reward function
 
         # calculate the projectile distances for each player for each game_state beforehand
         game_states_distances = []
@@ -642,7 +645,7 @@ class SkillshotLearner(object):
 
         for index, epoch_boards in enumerate(epoch_board_lists):
             game_display.display_sequence(epoch_boards, index)
-            print("Epoch {} of {} Over".format(index, len(epoch_board_lists)))
+            print("Epoch {}(+1) of {} Over".format(index, len(epoch_board_lists)))
 
         game_display.close_window()
 
@@ -650,14 +653,14 @@ class SkillshotLearner(object):
 def main():
     skl = SkillshotLearner()
 
-    skl.model_param_game_tick_limit = 100
+    skl.model_param_game_tick_limit = 200
     skl.use_random_start = True
     skl.model_define_actor()
     skl.model_define_critic()
     # skl.model_train(epochs=5, save_progress=False, save_boards=True)
-    skl.model_train(epochs=5, save_progress=False, save_boards=False)
+    skl.model_train(epochs=20, save_progress=False, save_boards=True)
 
-    # skl.display_training_replay()
+    skl.display_training_replay()
 
 
 if __name__ == "__main__":
