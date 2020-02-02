@@ -1,4 +1,5 @@
 import pygame
+import numpy as np
 
 from InputHandler import InputHandler
 from SkillshotGame import SkillshotGame
@@ -62,11 +63,16 @@ while run:
     # Update game object status
     skillshotGame.game_tick()
 
-    # Draw the combined board on the surface_board
-    for index_y, row_x in enumerate(skillshotGame.get_board()):
-        for index_x, item in enumerate(row_x):
-            pixel = pygame.Rect((index_y * pixel_size, index_x * pixel_size), (pixel_size, pixel_size))
-            pygame.draw.rect(surface_board, colours[item], pixel)
+    # Draw the combined board on the surface_board with np.ndenumerate()
+    for index, item in np.ndenumerate(skillshotGame.get_board()):
+        pixel = pygame.Rect([pixel_size * i for i in index], (pixel_size, pixel_size))
+        pygame.draw.rect(surface_board, colours[item], pixel)
+
+    # # Draw the combined board on the surface_board
+    # for index_y, row_x in enumerate(skillshotGame.get_board()):
+    #     for index_x, item in enumerate(row_x):
+    #         pixel = pygame.Rect((index_y * pixel_size, index_x * pixel_size), (pixel_size, pixel_size))
+    #         pygame.draw.rect(surface_board, colours[item], pixel)
 
     # Update screen surface
     screen.blit(surface_board, (10, 10))

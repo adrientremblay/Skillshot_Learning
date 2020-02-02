@@ -1,5 +1,5 @@
 import pygame
-
+import numpy as np
 
 class SkillshotGameDisplay(object):
     # Colours
@@ -44,11 +44,16 @@ class SkillshotGameDisplay(object):
                 if event.type == pygame.QUIT:
                     run = False
 
-            # Draw the combined board on the surface_board
-            for index_y, row_x in enumerate(boards[frame]):
-                for index_x, item in enumerate(row_x):
-                    pixel = pygame.Rect((index_y * self.pixel_size, index_x * self.pixel_size), (self.pixel_size, self.pixel_size))
-                    pygame.draw.rect(self.surface_board, self.colours[item], pixel)
+            # Draw the combined board on the surface_board with np.ndenumerate()
+            for index, item in np.ndenumerate(boards[frame]):
+                pixel = pygame.Rect([self.pixel_size * i for i in index], (self.pixel_size, self.pixel_size))
+                pygame.draw.rect(self.surface_board, self.colours[item], pixel)
+
+            # # Draw the combined board on the surface_board
+            # for index_y, row_x in enumerate(boards[frame]):
+            #     for index_x, item in enumerate(row_x):
+            #         pixel = pygame.Rect((index_y * self.pixel_size, index_x * self.pixel_size), (self.pixel_size, self.pixel_size))
+            #         pygame.draw.rect(self.surface_board, self.colours[item], pixel)
 
             # Prepare text info
             frame_info = self.text_font.render("Frame: {} / {}".format(frame, boards_len),
