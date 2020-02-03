@@ -51,11 +51,11 @@ class SkillshotLearner(object):
         self.training_boards_dir_name = "training_boards"
 
         # model
-        self.model_actor = None
-        self.model_critic = None
         self.dim_state_space = 12
         self.dim_action_space = 2  # 2 continuous action inputs
         self.dim_reward_space = 1  # 1d list
+        self.model_actor = self.model_define_actor()
+        self.model_critic = self.model_define_critic()
 
         # model hyper-params
         self.model_param_batch_size = 16
@@ -93,7 +93,7 @@ class SkillshotLearner(object):
         # actor.compile(optimizer="adam", loss="mse")  # using default learning rate
         actor.summary()
 
-        self.model_actor = actor
+        return actor
 
     def model_define_critic(self):
         # define a critic model, which predicts the resultant q-value from the actor's action and the game state
@@ -118,7 +118,7 @@ class SkillshotLearner(object):
         critic.compile(optimizer="adam", loss="mse")  # using default learning rate
         critic.summary()
 
-        self.model_critic = critic
+        return critic
 
     def load_actor_critic_models(self, load_index=-1):
         # loads actor and critic models from save locations
@@ -272,8 +272,8 @@ class SkillshotLearner(object):
         # reset the weights to the original weights
         self.model_actor.set_weights(existing_weights)
 
-        print(self.model_actor.predict(np.expand_dims(features, 0)), "normal")
-        print(predictions, "noisy")
+        # print(self.model_actor.predict(np.expand_dims(features, 0)), "normal")
+        # print(predictions, "noisy")
 
         # perform the predicted action(s), exiting out of batch dim
         self.do_actions(player_id, predictions[0])
@@ -581,7 +581,8 @@ class SkillshotLearner(object):
         for game_state in game_states:
             state_reward = dict()
             for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
-                player_reward = -game_state[player_id]["player_path_dist_opponent"]
+                player_reward = -game_state[player_id]["player_path_dist_opponent"] / self.game_environment.board_size[0]
+                print(player_reward)
                 state_reward[player_id] = player_reward
             rewards.append(state_reward)
         return rewards
@@ -686,8 +687,6 @@ def main():
 
     skl.model_param_game_tick_limit = 200
     skl.use_random_start = True
-    skl.model_define_actor()
-    skl.model_define_critic()
     # skl.model_train(epochs=5, save_progress=False, save_boards=True)
     skl.model_train(epochs=20, save_progress=False, save_boards=True)
 
