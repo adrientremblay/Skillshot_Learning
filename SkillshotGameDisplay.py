@@ -1,6 +1,7 @@
 import pygame
 import numpy as np
 
+
 class SkillshotGameDisplay(object):
     # Colours
     colours = [(0, 0, 0),
