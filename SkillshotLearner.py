@@ -70,8 +70,8 @@ class SkillshotLearner(object):
     def model_define_actor(self):
         # define an actor model, which chooses actions based on the game's state
 
-        k_init = tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.05)
-        # k_init = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.05)
+        # k_init = tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=0.05)
+        k_init = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.05)
 
         # inputs
         state_input = Input((self.dim_state_space,), name="state_input")
@@ -272,8 +272,8 @@ class SkillshotLearner(object):
         # reset the weights to the original weights
         self.model_actor.set_weights(existing_weights)
 
-        # print(self.model_actor.predict(np.expand_dims(features, 0)), "normal")
-        # print(predictions, "noisy")
+        print(self.model_actor.predict(np.expand_dims(features, 0)), "normal")
+        print(predictions, "noisy")
 
         # perform the predicted action(s), exiting out of batch dim
         self.do_actions(player_id, predictions[0])
@@ -321,7 +321,10 @@ class SkillshotLearner(object):
             print("Begin Fitting for Epoch:", epoch)
 
             # prepare rewards - initial state has no reward so ignore
-            rewards = self.calculate_rewards(cur_epoch_prog.get("game_state")[1:])
+            rewards = self.calculate_rewards_looking(cur_epoch_prog.get("game_state")[1:])
+            # rewards = self.calculate_rewards_simple(cur_epoch_prog.get("game_state")[1:])
+            # rewards = self.calculate_rewards(cur_epoch_prog.get("game_state")[1:])
+
             for reward in rewards:
                 for player_id in self.player_ids:
                     cur_epoch_prog.get("player_rewards").get(player_id).append(reward.get(player_id))
@@ -569,11 +572,39 @@ class SkillshotLearner(object):
             prepared_rewards.append(reward)
         return prepared_rewards
 
+    def calculate_rewards_looking(self, game_states):
+        # takes a list of states and calculates the reward or q-value for each state
+        # returning a list of dicts with rewards for each player
+
+        # this reward function rewards looking at the opponent
+        rewards = []
+        for game_state in game_states:
+            state_reward = dict()
+            for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
+                player_reward = -game_state[player_id]["player_path_dist_opponent"]
+                state_reward[player_id] = player_reward
+            rewards.append(state_reward)
+        return rewards
+
+    def calculate_rewards_simple(self, game_states):
+        # takes a list of states and calculates the reward or q-value for each state
+        # returning a list of dicts with rewards for each player
+
+        # simple version of the reward function, only compared projectile distances for current state
+
+        rewards = []
+        for game_state in game_states:
+            state_reward = dict()
+            for player_id, opponent_id in zip(self.player_ids, self.player_ids[::-1]):
+                player_reward = game_state[player_id]["projectile_dist_opponent"] - game_state[opponent_id]["projectile_dist_opponent"]
+                state_reward[player_id] = player_reward
+            rewards.append(state_reward)
+        return rewards
+
     def calculate_rewards(self, game_states, on_target_multiplier_reduction=0.25, loss_reward_multiplier=2,
                           base_reward_multiplier=0.75):
         # takes a list of states and calculates the reward or q-value for each state
         # returning a list of dicts with rewards for each player
-        # TODO simpler version of this reward function
 
         # calculate the projectile distances for each player for each game_state beforehand
         game_states_distances = []
